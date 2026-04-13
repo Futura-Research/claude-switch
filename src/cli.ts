@@ -1,0 +1,191 @@
+import { initConfig, loadConfig } from "./config.js";
+import { addProfile, removeProfile, listProfiles, setDefault } from "./profiles.js";
+import { addRule, removeRule, listRules } from "./rules.js";
+import { resolveProfile, parseArgs } from "./resolver.js";
+import { launch } from "./launcher.js";
+
+const VERSION = "0.0.0";
+
+export function printUsage(): void {
+  console.log(
+    `
+claude-switch — Switch between multiple Claude Code accounts
+
+Usage:
+  claude-switch --<profile> [claude flags...]    Launch claude with a profile
+  claude-switch [claude flags...]                Auto-detect profile from cwd
+  claude-switch add <name>                       Add a new profile
+  claude-switch remove <name>                    Remove a profile
+  claude-switch list                             List all profiles
+  claude-switch default <name>                   Set the default profile
+  claude-switch rule add <dir> <profile>         Add a directory rule
+  claude-switch rule remove <dir>                Remove a directory rule
+  claude-switch rule list                        List all rules
+  claude-switch which                            Show which profile would be used
+  claude-switch --help                           Show this help
+  claude-switch --version                        Show version
+`.trim(),
+  );
+}
+
+export function requireName(args: string[], usage: string): string {
+  const name = args[0];
+  if (!name) {
+    console.error(usage);
+    process.exit(1);
+  }
+  return name;
+}
+
+export function runWithErrorHandling(fn: () => void): void {
+  try {
+    fn();
+  } catch (err) {
+    console.error((err as Error).message);
+    process.exit(1);
+  }
+}
+
+export function handleAdd(args: string[], baseDirOverride?: string): void {
+  const name = requireName(args, "Usage: claude-switch add <name>");
+  initConfig(baseDirOverride);
+
+  runWithErrorHandling(() => {
+    const profileDir = addProfile(name, baseDirOverride);
+    console.log(`\n  Creating profile "${name}"...`);
+    console.log(`  Config directory: ${profileDir}\n`);
+    console.log("  Launching Claude Code to authenticate...");
+    console.log("  (complete the login flow in your browser)\n");
+
+    launch({ configDir: profileDir, args: [] });
+  });
+}
+
+export function handleRemove(args: string[], baseDirOverride?: string): void {
+  const name = requireName(args, "Usage: claude-switch remove <name>");
+  runWithErrorHandling(() => {
+    removeProfile(name, baseDirOverride);
+    console.log(`Profile "${name}" removed.`);
+  });
+}
+
+export function handleList(baseDirOverride?: string): void {
+  const profiles = listProfiles(baseDirOverride);
+  if (profiles.length === 0) {
+    console.log("No profiles configured. Add one with: claude-switch add <name>");
+    return;
+  }
+
+  console.log("\nProfiles:\n");
+  for (const p of profiles) {
+    const marker = p.isDefault ? " (default)" : "";
+    console.log(`  ${p.name}${marker}`);
+    console.log(`    ${p.configDir}`);
+  }
+  console.log();
+}
+
+export function handleDefault(args: string[], baseDirOverride?: string): void {
+  const name = requireName(args, "Usage: claude-switch default <name>");
+  runWithErrorHandling(() => {
+    setDefault(name, baseDirOverride);
+    console.log(`Default profile set to "${name}".`);
+  });
+}
+
+export function handleRule(args: string[], baseDirOverride?: string): void {
+  const subcommand = args[0];
+
+  switch (subcommand) {
+    case "add": {
+      const dir = args[1];
+      const profile = args[2];
+      if (!dir || !profile) {
+        console.error("Usage: claude-switch rule add <directory> <profile>");
+        process.exit(1);
+      }
+      runWithErrorHandling(() => {
+        addRule(dir, profile, baseDirOverride);
+        console.log(`Rule added: ${dir} → ${profile}`);
+      });
+      break;
+    }
+    case "remove": {
+      const dir = args[1];
+      if (!dir) {
+        console.error("Usage: claude-switch rule remove <directory>");
+        process.exit(1);
+      }
+      runWithErrorHandling(() => {
+        removeRule(dir, baseDirOverride);
+        console.log(`Rule removed for ${dir}.`);
+      });
+      break;
+    }
+    case "list": {
+      const rules = listRules(baseDirOverride);
+      if (rules.length === 0) {
+        console.log("No rules configured. Add one with: claude-switch rule add <dir> <profile>");
+        return;
+      }
+      console.log("\nRules:\n");
+      for (const r of rules) {
+        console.log(`  ${r.directory} → ${r.profile}`);
+      }
+      console.log();
+      break;
+    }
+    default:
+      console.error("Usage: claude-switch rule <add|remove|list> [args...]");
+      process.exit(1);
+  }
+}
+
+export function handleWhich(baseDirOverride?: string): void {
+  runWithErrorHandling(() => {
+    const resolved = resolveProfile([], process.cwd(), baseDirOverride);
+    console.log(`Profile: ${resolved.name} (via ${resolved.source})`);
+    console.log(`Config:  ${resolved.configDir}`);
+  });
+}
+
+export function launchClaude(args: string[], baseDirOverride?: string): void {
+  runWithErrorHandling(() => {
+    initConfig(baseDirOverride);
+    const resolved = resolveProfile(args, process.cwd(), baseDirOverride);
+    const config = loadConfig(baseDirOverride);
+    const { claudeArgs } = parseArgs(args, config);
+    launch({ configDir: resolved.configDir, args: claudeArgs });
+  });
+}
+
+export function printVersion(): void {
+  console.log(`claude-switch ${VERSION}`);
+}
+
+export function run(argv: string[]): void {
+  if (argv.length === 0) {
+    launchClaude([]);
+    return;
+  }
+
+  const commands: Record<string, ((args: string[]) => void) | undefined> = {
+    add: (args) => handleAdd(args),
+    remove: (args) => handleRemove(args),
+    list: () => handleList(),
+    default: (args) => handleDefault(args),
+    rule: (args) => handleRule(args),
+    which: () => handleWhich(),
+    "--help": () => printUsage(),
+    "-h": () => printUsage(),
+    "--version": () => printVersion(),
+    "-v": () => printVersion(),
+  };
+
+  const handler = commands[argv[0]];
+  if (handler) {
+    handler(argv.slice(1));
+  } else {
+    launchClaude(argv);
+  }
+}
