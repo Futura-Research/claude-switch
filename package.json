@@ -6,14 +6,14 @@
   "license": "Apache-2.0",
   "type": "module",
   "bin": {
-    "claude-switch": "./dist/index.cjs"
+    "claude-switch": "dist/index.cjs"
   },
   "files": [
     "dist"
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/futura-research/claude-switch"
+    "url": "git+https://github.com/futura-research/claude-switch.git"
   },
   "publishConfig": {
     "access": "public"
