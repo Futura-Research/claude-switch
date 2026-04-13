@@ -1,5 +1,8 @@
 # claude-switch
 
+[![Maintainability](https://qlty.sh/gh/Futura-Research/projects/claude-switch/maintainability.svg)](https://qlty.sh/gh/Futura-Research/projects/claude-switch)
+[![Code Coverage](https://qlty.sh/gh/Futura-Research/projects/claude-switch/coverage.svg)](https://qlty.sh/gh/Futura-Research/projects/claude-switch)
+
 Switch between multiple Claude Code accounts with named profiles.
 
 If you use Claude Code with more than one Anthropic account (e.g. work + personal), `claude-switch` eliminates the constant log out / log in cycle by giving each account its own isolated config directory.
