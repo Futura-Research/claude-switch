@@ -4,7 +4,7 @@ import { addRule, removeRule, listRules } from "./rules.js";
 import { resolveProfile, parseArgs } from "./resolver.js";
 import { launch } from "./launcher.js";
 
-const VERSION = "0.0.0";
+const VERSION = "1.0.0";
 
 export function printUsage(): void {
   console.log(
