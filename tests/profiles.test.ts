@@ -88,6 +88,13 @@ describe("removeProfile", () => {
     expect(getDefault(tmpDir)).toBe("personal");
   });
 
+  it("keeps default unchanged when removing a non-default profile", () => {
+    addProfile("work", tmpDir);
+    addProfile("personal", tmpDir);
+    removeProfile("personal", tmpDir);
+    expect(getDefault(tmpDir)).toBe("work");
+  });
+
   it("clears default when removing last profile", () => {
     addProfile("work", tmpDir);
     removeProfile("work", tmpDir);

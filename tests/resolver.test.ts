@@ -83,6 +83,15 @@ describe("matchRule", () => {
     expect(matchRule("/code/project/subdir", config)).toBe("work");
   });
 
+  it("returns longest match regardless of rule insertion order", () => {
+    // Add longer rule first, then shorter — ensures the shorter
+    // match doesn't overwrite when iterated after the longer one
+    addRule("/code/project", "work", tmpDir);
+    addRule("/code", "personal", tmpDir);
+    const config = loadConfig(tmpDir);
+    expect(matchRule("/code/project/subdir", config)).toBe("work");
+  });
+
   it("returns null when no rules match", () => {
     const config = loadConfig(tmpDir);
     expect(matchRule("/unmatched", config)).toBeNull();
