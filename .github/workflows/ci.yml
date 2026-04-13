@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   ci:
@@ -43,9 +44,9 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Upload coverage
+      - name: Upload coverage to Qlty
         if: matrix.node-version == 24
-        uses: actions/upload-artifact@v4
+        uses: qltysh/qlty-action/coverage@v2
         with:
-          name: coverage-report
-          path: coverage/
+          oidc: true
+          files: coverage/lcov.info
