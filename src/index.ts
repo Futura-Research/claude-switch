@@ -28,16 +28,29 @@ Usage:
   );
 }
 
-function handleAdd(args: string[]): void {
+function requireName(args: string[], usage: string): string {
   const name = args[0];
   if (!name) {
-    console.error("Usage: claude-switch add <name>");
+    console.error(usage);
     process.exit(1);
   }
+  return name;
+}
 
+function runWithErrorHandling(fn: () => void): void {
+  try {
+    fn();
+  } catch (err) {
+    console.error((err as Error).message);
+    process.exit(1);
+  }
+}
+
+function handleAdd(args: string[]): void {
+  const name = requireName(args, "Usage: claude-switch add <name>");
   initConfig();
 
-  try {
+  runWithErrorHandling(() => {
     const profileDir = addProfile(name);
     console.log(`\n  Creating profile "${name}"...`);
     console.log(`  Config directory: ${profileDir}\n`);
@@ -45,26 +58,15 @@ function handleAdd(args: string[]): void {
     console.log("  (complete the login flow in your browser)\n");
 
     launch({ configDir: profileDir, args: [] });
-  } catch (err) {
-    console.error((err as Error).message);
-    process.exit(1);
-  }
+  });
 }
 
 function handleRemove(args: string[]): void {
-  const name = args[0];
-  if (!name) {
-    console.error("Usage: claude-switch remove <name>");
-    process.exit(1);
-  }
-
-  try {
+  const name = requireName(args, "Usage: claude-switch remove <name>");
+  runWithErrorHandling(() => {
     removeProfile(name);
     console.log(`Profile "${name}" removed.`);
-  } catch (err) {
-    console.error((err as Error).message);
-    process.exit(1);
-  }
+  });
 }
 
 function handleList(): void {
@@ -84,19 +86,11 @@ function handleList(): void {
 }
 
 function handleDefault(args: string[]): void {
-  const name = args[0];
-  if (!name) {
-    console.error("Usage: claude-switch default <name>");
-    process.exit(1);
-  }
-
-  try {
+  const name = requireName(args, "Usage: claude-switch default <name>");
+  runWithErrorHandling(() => {
     setDefault(name);
     console.log(`Default profile set to "${name}".`);
-  } catch (err) {
-    console.error((err as Error).message);
-    process.exit(1);
-  }
+  });
 }
 
 function handleRule(args: string[]): void {
@@ -110,13 +104,10 @@ function handleRule(args: string[]): void {
         console.error("Usage: claude-switch rule add <directory> <profile>");
         process.exit(1);
       }
-      try {
+      runWithErrorHandling(() => {
         addRule(dir, profile);
         console.log(`Rule added: ${dir} → ${profile}`);
-      } catch (err) {
-        console.error((err as Error).message);
-        process.exit(1);
-      }
+      });
       break;
     }
     case "remove": {
@@ -125,13 +116,10 @@ function handleRule(args: string[]): void {
         console.error("Usage: claude-switch rule remove <directory>");
         process.exit(1);
       }
-      try {
+      runWithErrorHandling(() => {
         removeRule(dir);
         console.log(`Rule removed for ${dir}.`);
-      } catch (err) {
-        console.error((err as Error).message);
-        process.exit(1);
-      }
+      });
       break;
     }
     case "list": {
@@ -154,76 +142,49 @@ function handleRule(args: string[]): void {
 }
 
 function handleWhich(): void {
-  try {
+  runWithErrorHandling(() => {
     const resolved = resolveProfile([], process.cwd());
     console.log(`Profile: ${resolved.name} (via ${resolved.source})`);
     console.log(`Config:  ${resolved.configDir}`);
-  } catch (err) {
-    console.error((err as Error).message);
-    process.exit(1);
-  }
+  });
 }
 
-function main(): void {
-  const args = process.argv.slice(2);
-
-  if (args.length === 0) {
-    // No args — auto-detect and launch
-    try {
-      initConfig();
-      const resolved = resolveProfile([], process.cwd());
-      const config = loadConfig();
-      const { claudeArgs } = parseArgs([], config);
-      launch({ configDir: resolved.configDir, args: claudeArgs });
-    } catch (err) {
-      console.error((err as Error).message);
-      process.exit(1);
-    }
-    return;
-  }
-
-  const firstArg = args[0];
-
-  // Handle subcommands
-  switch (firstArg) {
-    case "add":
-      handleAdd(args.slice(1));
-      return;
-    case "remove":
-      handleRemove(args.slice(1));
-      return;
-    case "list":
-      handleList();
-      return;
-    case "default":
-      handleDefault(args.slice(1));
-      return;
-    case "rule":
-      handleRule(args.slice(1));
-      return;
-    case "which":
-      handleWhich();
-      return;
-    case "--help":
-    case "-h":
-      printUsage();
-      return;
-    case "--version":
-    case "-v":
-      console.log(`claude-switch ${VERSION}`);
-      return;
-  }
-
-  // Not a subcommand — treat as claude launch with potential profile flag
-  try {
+function launchClaude(args: string[]): void {
+  runWithErrorHandling(() => {
     initConfig();
     const resolved = resolveProfile(args, process.cwd());
     const config = loadConfig();
     const { claudeArgs } = parseArgs(args, config);
     launch({ configDir: resolved.configDir, args: claudeArgs });
-  } catch (err) {
-    console.error((err as Error).message);
-    process.exit(1);
+  });
+}
+
+const COMMANDS: Record<string, ((args: string[]) => void) | undefined> = {
+  add: (args) => handleAdd(args),
+  remove: (args) => handleRemove(args),
+  list: () => handleList(),
+  default: (args) => handleDefault(args),
+  rule: (args) => handleRule(args),
+  which: () => handleWhich(),
+  "--help": () => printUsage(),
+  "-h": () => printUsage(),
+  "--version": () => console.log(`claude-switch ${VERSION}`),
+  "-v": () => console.log(`claude-switch ${VERSION}`),
+};
+
+function main(): void {
+  const args = process.argv.slice(2);
+
+  if (args.length === 0) {
+    launchClaude([]);
+    return;
+  }
+
+  const handler = COMMANDS[args[0]];
+  if (handler) {
+    handler(args.slice(1));
+  } else {
+    launchClaude(args);
   }
 }
 

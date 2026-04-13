@@ -105,6 +105,7 @@ claude-switch --<profile> [claude flags...]
 ```
 
 Resolution order:
+
 1. `--<profile>` flag (if it matches a known profile name)
 2. Directory rules (longest prefix match)
 3. Default profile
