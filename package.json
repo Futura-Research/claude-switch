@@ -1,0 +1,43 @@
+{
+  "name": "@futura-research/claude-switch",
+  "version": "0.0.0",
+  "description": "Switch between multiple Claude Code accounts with named profiles",
+  "author": "Futura Research",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "claude-switch": "./dist/index.cjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/futura-research/claude-switch"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsup",
+    "lint": "eslint src/ tests/",
+    "format": "prettier --write src/ tests/",
+    "format:check": "prettier --check src/ tests/",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "prepare": "simple-git-hooks"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "anthropic",
+    "profile",
+    "switch",
+    "multi-account",
+    "cli"
+  ]
+}
