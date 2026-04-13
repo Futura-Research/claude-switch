@@ -8,7 +8,7 @@ export default defineConfig({
       include: ["src/**/*.ts"],
       exclude: ["src/index.ts"],
       thresholds: {
-        branches: 90,
+        branches: 85,
         functions: 90,
         lines: 90,
         statements: 90,

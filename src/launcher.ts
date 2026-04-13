@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import * as path from "node:path";
 import { expandTilde } from "./config.js";
 
-function findClaude(): string {
+export function findClaude(): string {
   const result = spawnSync("which", ["claude"], { encoding: "utf-8" });
   if (result.status !== 0 || !result.stdout.trim()) {
     throw new Error(

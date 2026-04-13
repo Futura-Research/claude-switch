@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import * as path from "node:path";
 import * as os from "node:os";
-import { buildLaunchEnv, buildLaunchArgs } from "../src/launcher.js";
+import * as fs from "node:fs";
+import { spawnSync } from "node:child_process";
+import { buildLaunchEnv, buildLaunchArgs, findClaude } from "../src/launcher.js";
 
 describe("buildLaunchEnv", () => {
   it("sets CLAUDE_CONFIG_DIR to resolved absolute path", () => {
@@ -36,5 +38,48 @@ describe("buildLaunchArgs", () => {
     const output = buildLaunchArgs(input);
     output.push("extra");
     expect(input).toEqual(["--flag"]);
+  });
+});
+
+describe("findClaude", () => {
+  it("returns a path when claude is installed", () => {
+    // This test only runs if claude is actually installed
+    const check = spawnSync("which", ["claude"], { encoding: "utf-8" });
+    if (check.status !== 0) {
+      return; // skip if claude not installed
+    }
+    const result = findClaude();
+    expect(result).toBeTruthy();
+    expect(typeof result).toBe("string");
+  });
+});
+
+describe("launch integration", () => {
+  it("spawns a process with correct env and args", () => {
+    // Create a mock "claude" script that prints its env and args
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "claude-switch-launch-"));
+    const mockClaude = path.join(tmpDir, "mock-claude");
+    const outputFile = path.join(tmpDir, "output.json");
+
+    fs.writeFileSync(
+      mockClaude,
+      `#!/bin/sh
+echo "{\\"configDir\\": \\"$CLAUDE_CONFIG_DIR\\", \\"args\\": \\"$*\\"}" > ${outputFile}
+`,
+    );
+    fs.chmodSync(mockClaude, 0o755);
+
+    // Run the mock directly with spawnSync to test env passing
+    const env = buildLaunchEnv("/tmp/test-profile");
+    const args = buildLaunchArgs(["--dangerously-skip-permissions"]);
+    const result = spawnSync(mockClaude, args, { env, stdio: "pipe" });
+
+    expect(result.status).toBe(0);
+
+    const output = JSON.parse(fs.readFileSync(outputFile, "utf-8"));
+    expect(output.configDir).toBe("/tmp/test-profile");
+    expect(output.args).toBe("--dangerously-skip-permissions");
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 });
