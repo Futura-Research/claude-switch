@@ -145,13 +145,14 @@ $ claude-switch add work
   (complete the login flow in your browser)
 
   Profile "work" created and authenticated.
-  
+
   Usage:
     claude-switch --work
     alias claude="claude-switch"  # then: claude --work
 ```
 
 Steps:
+
 1. Create `~/.claude-switch/profiles/work/` directory
 2. Update `config.json` with the new profile entry
 3. Run `CLAUDE_CONFIG_DIR=~/.claude-switch/profiles/work claude` so the user completes auth
@@ -220,13 +221,13 @@ claude-switch/
 
 All tests use **Vitest**. No mocking of the filesystem — tests use a temp directory (`os.tmpdir()`) as the config root so they run in isolation and clean up after themselves.
 
-| Module       | What to test                                                       |
-|--------------|--------------------------------------------------------------------|
-| config.ts    | Init creates dir + empty config, load/save round-trips, handles missing file gracefully |
-| profiles.ts  | Add creates dir + updates config, remove deletes entry, list formats output, default sets/gets |
-| rules.ts     | Add/remove rules, list formatting                                  |
-| resolver.ts  | Flag extraction, directory prefix matching (longest wins), default fallback, no-profile error |
-| launcher.ts  | Correct env var set, args passed through, claude-not-found error   |
+| Module      | What to test                                                                                   |
+| ----------- | ---------------------------------------------------------------------------------------------- |
+| config.ts   | Init creates dir + empty config, load/save round-trips, handles missing file gracefully        |
+| profiles.ts | Add creates dir + updates config, remove deletes entry, list formats output, default sets/gets |
+| rules.ts    | Add/remove rules, list formatting                                                              |
+| resolver.ts | Flag extraction, directory prefix matching (longest wins), default fallback, no-profile error  |
+| launcher.ts | Correct env var set, args passed through, claude-not-found error                               |
 
 **Coverage target**: 90%+ on `config`, `profiles`, `rules`, `resolver`. `launcher.ts` is harder to unit test (spawns a process) — test the arg/env assembly, not the spawn itself.
 
@@ -238,12 +239,15 @@ All tests use **Vitest**. No mocking of the filesystem — tests use a temp dire
 - **Bugfix branches** — `fix/<name>` off `develop` (or `main` for hotfixes).
 
 ### Release flow
+
 1. `develop` → PR to `main` when ready for a release
 2. Tag `main` with semver (`v1.0.0`, `v1.1.0`, etc.)
 3. GitHub Action publishes to npm on tag push
 
 ### Commit messages
+
 Follow [Conventional Commits](https://www.conventionalcommits.org/):
+
 ```
 feat: add auto-switch rules
 fix: handle tilde expansion in config paths
@@ -271,7 +275,7 @@ steps:
 ```yaml
 on:
   push:
-    tags: ['v*']
+    tags: ["v*"]
 
 steps:
   - Checkout
@@ -310,6 +314,7 @@ Requires an `NPM_TOKEN` repository secret (generated from npmjs.com → Access T
 ```
 
 Key points:
+
 - **`name`**: `@futura-research/claude-switch` — scoped to the org. Scoped packages are private by default on npm, so `publishConfig.access: "public"` is required.
 - **`files`**: only ships the `dist/` folder — no source, tests, or config files in the published package.
 - **`bin`**: registers `claude-switch` as a global command so `npx @futura-research/claude-switch` just works.
@@ -317,6 +322,7 @@ Key points:
 ### How to publish
 
 **First time (manual):**
+
 ```bash
 # Log in to npm as a member of the @futura-research org
 npm login
@@ -332,11 +338,13 @@ npm publish --access public
 ```
 
 **Subsequent releases (automated via CI):**
+
 1. Bump version: `npm version patch|minor|major` (this creates a commit + tag)
 2. Push the tag: `git push origin v1.x.x`
 3. GitHub Actions picks up the `v*` tag → runs build → `npm publish`
 
 ### npm token setup for CI
+
 1. Go to https://www.npmjs.com → Access Tokens → Generate New Token
 2. Choose **Granular Access Token**, scope it to `@futura-research/*` packages, permission: **Read and Write**
 3. Add it as a GitHub repo secret named `NPM_TOKEN`
@@ -367,6 +375,7 @@ alias claude="npx @futura-research/claude-switch"
 ## Implementation Order
 
 ### Phase 1 — Project Scaffolding
+
 1. Initialize `package.json` as `@futura-research/claude-switch` with publishConfig, bin, files, repository
 2. Configure TypeScript (`tsconfig.json`)
 3. Configure tsup (`tsup.config.ts`)
@@ -377,6 +386,7 @@ alias claude="npx @futura-research/claude-switch"
 8. Create `CONTRIBUTING.md`
 
 ### Phase 2 — Core Logic + Tests
+
 1. `config.ts` + `config.test.ts` — config read/write + init
 2. `profiles.ts` + `profiles.test.ts` — add, remove, list, default
 3. `rules.ts` + `rules.test.ts` — rule add, remove, list
@@ -384,11 +394,13 @@ alias claude="npx @futura-research/claude-switch"
 5. `launcher.ts` + `launcher.test.ts` — env setup + exec
 
 ### Phase 3 — CLI Wiring + Integration
+
 1. `index.ts` — CLI dispatch (subcommands vs launch mode)
 2. End-to-end manual testing
 3. README.md — install, usage, examples, attribution notice
 
 ### Phase 4 — Publish
+
 1. Final review — lint, test, build all pass clean
 2. Set up `NPM_TOKEN` secret in GitHub repo settings
 3. Add GitHub Actions publish workflow (triggers on `v*` tags)
