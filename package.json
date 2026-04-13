@@ -1,0 +1,65 @@
+{
+  "name": "@futura-research/claude-switch",
+  "version": "0.0.0",
+  "description": "Switch between multiple Claude Code accounts with named profiles",
+  "author": "Futura Research",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "claude-switch": "./dist/index.cjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/futura-research/claude-switch"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsup",
+    "lint": "eslint src/ tests/",
+    "format": "prettier --write src/ tests/",
+    "format:check": "prettier --check src/ tests/",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "prepare": "simple-git-hooks"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "anthropic",
+    "profile",
+    "switch",
+    "multi-account",
+    "cli"
+  ],
+  "simple-git-hooks": {
+    "pre-commit": "npx lint-staged",
+    "pre-push": "npm test"
+  },
+  "lint-staged": {
+    "*.ts": [
+      "eslint --fix",
+      "prettier --write"
+    ]
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@vitest/coverage-v8": "^4.1.4",
+    "eslint": "^10.2.0",
+    "lint-staged": "^16.4.0",
+    "prettier": "^3.8.2",
+    "simple-git-hooks": "^2.13.1",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.2",
+    "typescript-eslint": "^8.58.1",
+    "vitest": "^4.1.4"
+  }
+}
