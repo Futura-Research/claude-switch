@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   ci:
@@ -48,5 +47,5 @@ jobs:
         if: matrix.node-version == 24
         uses: qltysh/qlty-action/coverage@v2
         with:
-          oidc: true
+          token: ${{ secrets.QLTY_COVERAGE_TOKEN }}
           files: coverage/lcov.info
