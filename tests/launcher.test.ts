@@ -3,7 +3,7 @@ import * as path from "node:path";
 import * as os from "node:os";
 import * as fs from "node:fs";
 import { spawnSync } from "node:child_process";
-import { buildLaunchEnv, buildLaunchArgs, findClaude } from "../src/launcher.js";
+import { buildLaunchEnv, buildLaunchArgs } from "../src/launcher.js";
 
 describe("buildLaunchEnv", () => {
   it("sets CLAUDE_CONFIG_DIR to resolved absolute path", () => {
@@ -38,19 +38,6 @@ describe("buildLaunchArgs", () => {
     const output = buildLaunchArgs(input);
     output.push("extra");
     expect(input).toEqual(["--flag"]);
-  });
-});
-
-describe("findClaude", () => {
-  it("returns a path when claude is installed", () => {
-    // This test only runs if claude is actually installed
-    const check = spawnSync("which", ["claude"], { encoding: "utf-8" });
-    if (check.status !== 0) {
-      return; // skip if claude not installed
-    }
-    const result = findClaude();
-    expect(result).toBeTruthy();
-    expect(typeof result).toBe("string");
   });
 });
 

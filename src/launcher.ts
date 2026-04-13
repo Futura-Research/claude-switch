@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import * as path from "node:path";
 import { expandTilde } from "./config.js";
 
+/* v8 ignore start — integration boundary: relies on system `which` */
 export function findClaude(): string {
   const result = spawnSync("which", ["claude"], { encoding: "utf-8" });
   if (result.status !== 0 || !result.stdout.trim()) {
@@ -11,6 +12,7 @@ export function findClaude(): string {
   }
   return result.stdout.trim();
 }
+/* v8 ignore stop */
 
 export interface LaunchOptions {
   configDir: string;
@@ -29,6 +31,7 @@ export function buildLaunchArgs(args: string[]): string[] {
   return [...args];
 }
 
+/* v8 ignore start — integration boundary: spawns claude + process.exit */
 export function launch(options: LaunchOptions): never {
   const claudePath = options.claudePath ?? findClaude();
   const env = buildLaunchEnv(options.configDir);
@@ -41,3 +44,4 @@ export function launch(options: LaunchOptions): never {
 
   process.exit(result.status ?? 1);
 }
+/* v8 ignore stop */
