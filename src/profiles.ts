@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import { loadConfig, saveConfig, getProfileDir } from "./config.js";
-import { copyBaseConfig, resetProfileDir, type CopyCategory } from "./migrate.js";
+import { copyBaseConfig, copyDir, resetProfileDir, type CopyCategory } from "./migrate.js";
 
 const RESERVED_NAMES = [
   "help",
@@ -128,9 +128,10 @@ export function duplicateProfile(
 
   const sourceDir = config.profiles[sourceName].config_dir;
   const targetDir = getProfileDir(targetName, baseDirOverride);
-  fs.mkdirSync(targetDir, { recursive: true });
   if (fs.existsSync(sourceDir)) {
-    fs.cpSync(sourceDir, targetDir, { recursive: true, force: true });
+    copyDir(sourceDir, targetDir);
+  } else {
+    fs.mkdirSync(targetDir, { recursive: true });
   }
 
   config.profiles[targetName] = { config_dir: targetDir };
