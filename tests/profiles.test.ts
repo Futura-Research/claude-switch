@@ -232,6 +232,18 @@ describe("duplicateProfile", () => {
     expect(() => duplicateProfile("work", "123bad", tmpDir)).toThrow("Invalid profile name");
   });
 
+  it("creates empty target dir when source config dir is missing from disk", () => {
+    addProfile("work", tmpDir);
+    // Manually remove the source dir from disk to simulate deletion
+    const config = loadConfig(tmpDir);
+    fs.rmSync(config.profiles["work"].config_dir, { recursive: true, force: true });
+
+    const targetDir = duplicateProfile("work", "work-copy", tmpDir);
+
+    expect(fs.existsSync(targetDir)).toBe(true);
+    expect(fs.statSync(targetDir).isDirectory()).toBe(true);
+  });
+
   it("preserves auth fields in .claude.json", () => {
     const profileDir = addProfile("work", tmpDir);
     fs.writeFileSync(

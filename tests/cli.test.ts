@@ -470,6 +470,36 @@ describe("handleCopyConfig", () => {
 
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Nothing selected"));
   });
+
+  it("reports nothing to copy when categories selected but no files match", async () => {
+    const { confirm } = await import("../src/prompt.js");
+    // Select history only, but source has no sessions or history.jsonl
+    vi.mocked(confirm)
+      .mockResolvedValueOnce(false) // settings
+      .mockResolvedValueOnce(false) // skills
+      .mockResolvedValueOnce(false) // ide
+      .mockResolvedValueOnce(true) // history — selected
+      .mockResolvedValueOnce(false); // work
+
+    addProfile("work", tmpDir);
+    const fakeClaudeDir = path.join(tmpDir, "fake-claude");
+    fs.mkdirSync(fakeClaudeDir);
+    fs.writeFileSync(path.join(fakeClaudeDir, "settings.json"), "{}"); // only settings exists
+
+    const origEnv = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = fakeClaudeDir;
+    try {
+      await handleCopyConfig(["work"], tmpDir);
+    } finally {
+      if (origEnv !== undefined) {
+        process.env.CLAUDE_CONFIG_DIR = origEnv;
+      } else {
+        delete process.env.CLAUDE_CONFIG_DIR;
+      }
+    }
+
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Nothing to copy"));
+  });
 });
 
 describe("promptCopyCategories", () => {
