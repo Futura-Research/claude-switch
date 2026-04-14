@@ -27,8 +27,8 @@ export const COPY_CATEGORIES: Record<
   },
   history: {
     label: "Conversation history",
-    description: "Chat transcripts per project — can be very large",
-    paths: ["projects", "sessions", "history.jsonl"],
+    description: "Resume sessions and command history (projects are shared across profiles)",
+    paths: ["sessions", "history.jsonl"],
     defaultOn: false,
   },
   work: {
