@@ -116,6 +116,32 @@ describe("removeProfile", () => {
     const updated = loadConfig(tmpDir);
     expect(updated.rules).toHaveLength(0);
   });
+
+  it("deletes the profile directory from disk by default", () => {
+    const profileDir = addProfile("work", tmpDir);
+    fs.writeFileSync(path.join(profileDir, "settings.json"), "{}");
+
+    removeProfile("work", tmpDir);
+
+    expect(fs.existsSync(profileDir)).toBe(false);
+  });
+
+  it("keeps the profile directory when keepDir is true", () => {
+    const profileDir = addProfile("work", tmpDir);
+    fs.writeFileSync(path.join(profileDir, "settings.json"), "{}");
+
+    removeProfile("work", tmpDir, { keepDir: true });
+
+    expect(fs.existsSync(profileDir)).toBe(true);
+    expect(fs.existsSync(path.join(profileDir, "settings.json"))).toBe(true);
+  });
+
+  it("does not error when profile directory is already missing", () => {
+    const profileDir = addProfile("work", tmpDir);
+    fs.rmSync(profileDir, { recursive: true, force: true });
+
+    expect(() => removeProfile("work", tmpDir)).not.toThrow();
+  });
 });
 
 describe("listProfiles", () => {
