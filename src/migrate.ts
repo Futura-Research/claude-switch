@@ -29,6 +29,7 @@ export function stripAuthFromClaudeJson(dir: string): void {
 export function copyBaseConfig(
   sourceDir: string,
   targetDir: string,
+  options?: { stripAuth?: boolean },
 ): { copied: boolean; reason?: string } {
   if (!fs.existsSync(sourceDir)) {
     return { copied: false, reason: "source directory does not exist" };
@@ -41,6 +42,10 @@ export function copyBaseConfig(
 
   fs.mkdirSync(targetDir, { recursive: true });
   fs.cpSync(sourceDir, targetDir, { recursive: true, force: true });
+
+  if (options?.stripAuth !== false) {
+    stripAuthFromClaudeJson(targetDir);
+  }
 
   return { copied: true };
 }
