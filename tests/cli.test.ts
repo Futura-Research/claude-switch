@@ -16,8 +16,12 @@ import {
   handleList,
   handleDefault,
   handleRule,
+  handleCopyConfig,
+  handleReset,
+  handleDuplicate,
   handleWhich,
   launchClaude,
+  promptCopyCategories,
 } from "../src/cli.js";
 
 // Mock launcher to avoid spawning real processes
@@ -25,17 +29,25 @@ vi.mock("../src/launcher.js", () => ({
   launch: vi.fn(),
 }));
 
+// Mock prompt to avoid interactive stdin in tests
+vi.mock("../src/prompt.js", () => ({
+  confirm: vi.fn().mockResolvedValue(true),
+}));
+
 let tmpDir: string;
 let exitSpy: ReturnType<typeof vi.spyOn>;
 let logSpy: ReturnType<typeof vi.spyOn>;
 let errorSpy: ReturnType<typeof vi.spyOn>;
 
-beforeEach(() => {
+beforeEach(async () => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "claude-switch-cli-test-"));
   initConfig(tmpDir);
   exitSpy = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
   logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
   errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  const { confirm } = await import("../src/prompt.js");
+  vi.mocked(confirm).mockClear();
+  vi.mocked(confirm).mockResolvedValue(true);
 });
 
 afterEach(() => {
@@ -90,29 +102,139 @@ describe("runWithErrorHandling", () => {
 describe("handleAdd", () => {
   it("creates profile and launches claude", async () => {
     const { launch } = await import("../src/launcher.js");
-    handleAdd(["work"], tmpDir);
+    await handleAdd(["work", "--no-copy"], tmpDir);
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Creating profile "work"'));
     expect(launch).toHaveBeenCalled();
   });
 
-  it("exits when name is missing", () => {
-    handleAdd([], tmpDir);
+  it("exits when name is missing", async () => {
+    await handleAdd([], tmpDir);
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
-  it("handles duplicate profile error", () => {
+  it("handles duplicate profile error", async () => {
     addProfile("work", tmpDir);
-    handleAdd(["work"], tmpDir);
+    await handleAdd(["work"], tmpDir);
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("already exists"));
     expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it("copies when user confirms prompt", async () => {
+    const { launch } = await import("../src/launcher.js");
+    const { confirm } = await import("../src/prompt.js");
+    vi.mocked(confirm).mockResolvedValue(true);
+
+    const fakeClaudeDir = path.join(tmpDir, "fake-claude");
+    fs.mkdirSync(fakeClaudeDir);
+    fs.writeFileSync(path.join(fakeClaudeDir, "settings.json"), '{"theme":"dark"}');
+
+    const origEnv = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = fakeClaudeDir;
+    try {
+      await handleAdd(["work"], tmpDir);
+    } finally {
+      if (origEnv !== undefined) {
+        process.env.CLAUDE_CONFIG_DIR = origEnv;
+      } else {
+        delete process.env.CLAUDE_CONFIG_DIR;
+      }
+    }
+
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining("Copy existing Claude settings"));
+    expect(launch).toHaveBeenCalled();
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Copied settings from"));
+    const profileDir = path.join(tmpDir, "profiles", "work");
+    expect(fs.readFileSync(path.join(profileDir, "settings.json"), "utf-8")).toBe(
+      '{"theme":"dark"}',
+    );
+  });
+
+  it("skips copy when user declines prompt", async () => {
+    const { launch } = await import("../src/launcher.js");
+    const { confirm } = await import("../src/prompt.js");
+    vi.mocked(confirm).mockResolvedValue(false);
+
+    const fakeClaudeDir = path.join(tmpDir, "fake-claude");
+    fs.mkdirSync(fakeClaudeDir);
+    fs.writeFileSync(path.join(fakeClaudeDir, "settings.json"), '{"theme":"dark"}');
+
+    const origEnv = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = fakeClaudeDir;
+    try {
+      await handleAdd(["work"], tmpDir);
+    } finally {
+      if (origEnv !== undefined) {
+        process.env.CLAUDE_CONFIG_DIR = origEnv;
+      } else {
+        delete process.env.CLAUDE_CONFIG_DIR;
+      }
+    }
+
+    expect(confirm).toHaveBeenCalled();
+    expect(launch).toHaveBeenCalled();
+    const profileDir = path.join(tmpDir, "profiles", "work");
+    const entries = fs.readdirSync(profileDir);
+    expect(entries.filter((e) => e !== "projects")).toHaveLength(0);
+  });
+
+  it("skips copy and prompt when --no-copy is passed", async () => {
+    const { launch } = await import("../src/launcher.js");
+    const { confirm } = await import("../src/prompt.js");
+    await handleAdd(["work", "--no-copy"], tmpDir);
+    expect(confirm).not.toHaveBeenCalled();
+    expect(launch).toHaveBeenCalled();
+    const profileDir = path.join(tmpDir, "profiles", "work");
+    const entries = fs.readdirSync(profileDir);
+    expect(entries.filter((e) => e !== "projects")).toHaveLength(0);
+  });
+
+  it("handles --no-copy before name", async () => {
+    const { launch } = await import("../src/launcher.js");
+    await handleAdd(["--no-copy", "work"], tmpDir);
+    expect(launch).toHaveBeenCalled();
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Creating profile "work"'));
+  });
+
+  it("skips prompt when base dir does not exist", async () => {
+    const { launch } = await import("../src/launcher.js");
+    const { confirm } = await import("../src/prompt.js");
+
+    const origEnv = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = path.join(tmpDir, "nonexistent");
+    try {
+      await handleAdd(["work"], tmpDir);
+    } finally {
+      if (origEnv !== undefined) {
+        process.env.CLAUDE_CONFIG_DIR = origEnv;
+      } else {
+        delete process.env.CLAUDE_CONFIG_DIR;
+      }
+    }
+
+    expect(confirm).not.toHaveBeenCalled();
+    expect(launch).toHaveBeenCalled();
   });
 });
 
 describe("handleRemove", () => {
-  it("removes existing profile", () => {
-    addProfile("work", tmpDir);
+  it("removes existing profile and deletes its directory", () => {
+    const profileDir = addProfile("work", tmpDir);
     handleRemove(["work"], tmpDir);
     expect(logSpy).toHaveBeenCalledWith('Profile "work" removed.');
+    expect(fs.existsSync(profileDir)).toBe(false);
+  });
+
+  it("keeps directory when --keep-dir is passed", () => {
+    const profileDir = addProfile("work", tmpDir);
+    handleRemove(["work", "--keep-dir"], tmpDir);
+    expect(logSpy).toHaveBeenCalledWith('Profile "work" removed.');
+    expect(fs.existsSync(profileDir)).toBe(true);
+  });
+
+  it("accepts --keep-dir before name", () => {
+    const profileDir = addProfile("work", tmpDir);
+    handleRemove(["--keep-dir", "work"], tmpDir);
+    expect(fs.existsSync(profileDir)).toBe(true);
   });
 
   it("exits when name is missing", () => {
@@ -224,6 +346,290 @@ describe("handleRule", () => {
   });
 });
 
+describe("handleCopyConfig", () => {
+  it("copies base config to existing profile", async () => {
+    addProfile("work", tmpDir);
+    const fakeClaudeDir = path.join(tmpDir, "fake-claude");
+    fs.mkdirSync(fakeClaudeDir);
+    fs.writeFileSync(path.join(fakeClaudeDir, "settings.json"), '{"key":"val"}');
+
+    const origEnv = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = fakeClaudeDir;
+    try {
+      await handleCopyConfig(["work"], tmpDir);
+    } finally {
+      if (origEnv !== undefined) {
+        process.env.CLAUDE_CONFIG_DIR = origEnv;
+      } else {
+        delete process.env.CLAUDE_CONFIG_DIR;
+      }
+    }
+
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Copied config from"));
+    const profileDir = path.join(tmpDir, "profiles", "work");
+    expect(fs.readFileSync(path.join(profileDir, "settings.json"), "utf-8")).toBe('{"key":"val"}');
+  });
+
+  it("exits with error when profile does not exist", async () => {
+    await handleCopyConfig(["nonexistent"], tmpDir);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("does not exist"));
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it("exits with error when name is missing", async () => {
+    await handleCopyConfig([], tmpDir);
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it("reports nothing to copy when source is empty", async () => {
+    addProfile("work", tmpDir);
+    const emptyDir = path.join(tmpDir, "empty-claude");
+    fs.mkdirSync(emptyDir);
+
+    const origEnv = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = emptyDir;
+    try {
+      await handleCopyConfig(["work"], tmpDir);
+    } finally {
+      if (origEnv !== undefined) {
+        process.env.CLAUDE_CONFIG_DIR = origEnv;
+      } else {
+        delete process.env.CLAUDE_CONFIG_DIR;
+      }
+    }
+
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Nothing to copy"));
+  });
+
+  it("dispatches correctly via run", async () => {
+    addProfile("work", tmpDir);
+    const fakeClaudeDir = path.join(tmpDir, "fake-claude");
+    fs.mkdirSync(fakeClaudeDir);
+    fs.writeFileSync(path.join(fakeClaudeDir, "settings.json"), "{}");
+
+    const origEnv = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = fakeClaudeDir;
+    try {
+      await run(["copy-config", "work"], tmpDir);
+    } finally {
+      if (origEnv !== undefined) {
+        process.env.CLAUDE_CONFIG_DIR = origEnv;
+      } else {
+        delete process.env.CLAUDE_CONFIG_DIR;
+      }
+    }
+
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Copied config from"));
+  });
+
+  it("only copies files for selected categories", async () => {
+    const { confirm } = await import("../src/prompt.js");
+    // settings=true, skills=false, ide=false, history=false, work=false
+    vi.mocked(confirm)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false);
+
+    addProfile("work", tmpDir);
+    const fakeClaudeDir = path.join(tmpDir, "fake-claude");
+    fs.mkdirSync(fakeClaudeDir);
+    fs.writeFileSync(path.join(fakeClaudeDir, "settings.json"), '{"theme":"dark"}');
+    fs.mkdirSync(path.join(fakeClaudeDir, "projects"), { recursive: true });
+    fs.writeFileSync(path.join(fakeClaudeDir, "projects", "chat.json"), "{}");
+
+    const origEnv = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = fakeClaudeDir;
+    try {
+      await handleCopyConfig(["work"], tmpDir);
+    } finally {
+      if (origEnv !== undefined) {
+        process.env.CLAUDE_CONFIG_DIR = origEnv;
+      } else {
+        delete process.env.CLAUDE_CONFIG_DIR;
+      }
+    }
+
+    const profileDir = path.join(tmpDir, "profiles", "work");
+    expect(fs.existsSync(path.join(profileDir, "settings.json"))).toBe(true);
+    expect(fs.existsSync(path.join(profileDir, "projects"))).toBe(false);
+  });
+
+  it("reports nothing when all categories declined", async () => {
+    const { confirm } = await import("../src/prompt.js");
+    vi.mocked(confirm)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false);
+
+    addProfile("work", tmpDir);
+    const fakeClaudeDir = path.join(tmpDir, "fake-claude");
+    fs.mkdirSync(fakeClaudeDir);
+    fs.writeFileSync(path.join(fakeClaudeDir, "settings.json"), "{}");
+
+    const origEnv = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = fakeClaudeDir;
+    try {
+      await handleCopyConfig(["work"], tmpDir);
+    } finally {
+      if (origEnv !== undefined) {
+        process.env.CLAUDE_CONFIG_DIR = origEnv;
+      } else {
+        delete process.env.CLAUDE_CONFIG_DIR;
+      }
+    }
+
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Nothing selected"));
+  });
+
+  it("reports nothing to copy when categories selected but no files match", async () => {
+    const { confirm } = await import("../src/prompt.js");
+    // Select history only, but source has no sessions or history.jsonl
+    vi.mocked(confirm)
+      .mockResolvedValueOnce(false) // settings
+      .mockResolvedValueOnce(false) // skills
+      .mockResolvedValueOnce(false) // ide
+      .mockResolvedValueOnce(true) // history — selected
+      .mockResolvedValueOnce(false); // work
+
+    addProfile("work", tmpDir);
+    const fakeClaudeDir = path.join(tmpDir, "fake-claude");
+    fs.mkdirSync(fakeClaudeDir);
+    fs.writeFileSync(path.join(fakeClaudeDir, "settings.json"), "{}"); // only settings exists
+
+    const origEnv = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = fakeClaudeDir;
+    try {
+      await handleCopyConfig(["work"], tmpDir);
+    } finally {
+      if (origEnv !== undefined) {
+        process.env.CLAUDE_CONFIG_DIR = origEnv;
+      } else {
+        delete process.env.CLAUDE_CONFIG_DIR;
+      }
+    }
+
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Nothing to copy"));
+  });
+});
+
+describe("promptCopyCategories", () => {
+  it("returns selected categories based on confirm responses", async () => {
+    const { confirm } = await import("../src/prompt.js");
+    // settings=true, skills=false, ide=true, history=false, work=false
+    vi.mocked(confirm)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false);
+
+    const fakeDir = path.join(tmpDir, "src");
+    fs.mkdirSync(fakeDir);
+    const categories = await promptCopyCategories(fakeDir);
+
+    expect(categories).toEqual(["settings", "ide"]);
+  });
+
+  it("returns empty array when all declined", async () => {
+    const { confirm } = await import("../src/prompt.js");
+    vi.mocked(confirm).mockResolvedValue(false);
+
+    const fakeDir = path.join(tmpDir, "src");
+    fs.mkdirSync(fakeDir);
+    const categories = await promptCopyCategories(fakeDir);
+
+    expect(categories).toHaveLength(0);
+  });
+
+  it("returns all categories when all confirmed", async () => {
+    const { confirm } = await import("../src/prompt.js");
+    vi.mocked(confirm).mockResolvedValue(true);
+
+    const fakeDir = path.join(tmpDir, "src");
+    fs.mkdirSync(fakeDir);
+    const categories = await promptCopyCategories(fakeDir);
+
+    expect(categories).toEqual(["settings", "skills", "ide", "history", "work"]);
+  });
+});
+
+describe("handleReset", () => {
+  it("resets existing profile", () => {
+    const profileDir = addProfile("work", tmpDir);
+    fs.writeFileSync(path.join(profileDir, "settings.json"), "{}");
+
+    handleReset(["work"], tmpDir);
+
+    expect(logSpy).toHaveBeenCalledWith('Profile "work" has been reset.');
+    expect(fs.readdirSync(profileDir)).toHaveLength(0);
+  });
+
+  it("exits with error when profile does not exist", () => {
+    handleReset(["nonexistent"], tmpDir);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("does not exist"));
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it("exits with error when name is missing", () => {
+    handleReset([], tmpDir);
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it("dispatches correctly via run", () => {
+    addProfile("work", tmpDir);
+    run(["reset", "work"], tmpDir);
+    expect(logSpy).toHaveBeenCalledWith('Profile "work" has been reset.');
+  });
+});
+
+describe("handleDuplicate", () => {
+  it("duplicates existing profile", () => {
+    const sourceDir = addProfile("work", tmpDir);
+    fs.writeFileSync(path.join(sourceDir, "settings.json"), '{"key":"val"}');
+
+    handleDuplicate(["work", "work-copy"], tmpDir);
+
+    expect(logSpy).toHaveBeenCalledWith('Profile "work-copy" created as a copy of "work".');
+    const targetDir = path.join(tmpDir, "profiles", "work-copy");
+    expect(fs.readFileSync(path.join(targetDir, "settings.json"), "utf-8")).toBe('{"key":"val"}');
+  });
+
+  it("exits with error when source does not exist", () => {
+    handleDuplicate(["nonexistent", "copy"], tmpDir);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("does not exist"));
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it("exits with error when target already exists", () => {
+    addProfile("work", tmpDir);
+    addProfile("personal", tmpDir);
+    handleDuplicate(["work", "personal"], tmpDir);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("already exists"));
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it("exits with error when args are missing", () => {
+    handleDuplicate([], tmpDir);
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it("exits with error when target name is missing", () => {
+    addProfile("work", tmpDir);
+    handleDuplicate(["work"], tmpDir);
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it("dispatches correctly via run", () => {
+    addProfile("work", tmpDir);
+    run(["duplicate", "work", "work-copy"], tmpDir);
+    expect(logSpy).toHaveBeenCalledWith('Profile "work-copy" created as a copy of "work".');
+  });
+});
+
 describe("handleWhich", () => {
   it("shows resolved profile", () => {
     addProfile("work", tmpDir);
@@ -276,45 +682,45 @@ describe("run", () => {
   });
 
   it("dispatches list command", () => {
-    run(["list"]);
+    run(["list"], tmpDir);
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("No profiles configured"));
   });
 
-  it("dispatches add command", () => {
-    run(["add"]);
+  it("dispatches add command", async () => {
+    await run(["add"], tmpDir);
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
   it("dispatches remove command", () => {
-    run(["remove"]);
+    run(["remove"], tmpDir);
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
   it("dispatches default command", () => {
-    run(["default"]);
+    run(["default"], tmpDir);
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
   it("dispatches rule command", () => {
-    run(["rule", "list"]);
+    run(["rule", "list"], tmpDir);
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("No rules configured"));
   });
 
   it("dispatches which command", () => {
-    run(["which"]);
+    run(["which"], tmpDir);
     // No profiles, so it should error
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
   it("falls through to launchClaude for unknown commands", () => {
     // No profiles configured, so launchClaude will error
-    run(["--some-unknown-flag"]);
+    run(["--some-unknown-flag"], tmpDir);
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
   it("calls launchClaude with empty args when no args given", () => {
     // No profiles, so it will error
-    run([]);
+    run([], tmpDir);
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 });

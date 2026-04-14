@@ -1,7 +1,20 @@
 import * as fs from "node:fs";
 import { loadConfig, saveConfig, getProfileDir } from "./config.js";
+import { copyBaseConfig, copyDir, resetProfileDir, type CopyCategory } from "./migrate.js";
 
-const RESERVED_NAMES = ["help", "version", "add", "remove", "list", "default", "rule", "which"];
+const RESERVED_NAMES = [
+  "help",
+  "version",
+  "add",
+  "remove",
+  "list",
+  "default",
+  "rule",
+  "which",
+  "copy-config",
+  "reset",
+  "duplicate",
+];
 
 function validateProfileName(name: string): void {
   if (!/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(name)) {
@@ -16,7 +29,13 @@ function validateProfileName(name: string): void {
   }
 }
 
-export function addProfile(name: string, baseDirOverride?: string): string {
+const DEFAULT_COPY_CATEGORIES: CopyCategory[] = ["settings", "skills", "ide"];
+
+export function addProfile(
+  name: string,
+  baseDirOverride?: string,
+  options?: { copyFrom?: string; categories?: CopyCategory[] },
+): string {
   validateProfileName(name);
 
   const config = loadConfig(baseDirOverride);
@@ -28,6 +47,10 @@ export function addProfile(name: string, baseDirOverride?: string): string {
   const profileDir = getProfileDir(name, baseDirOverride);
   fs.mkdirSync(profileDir, { recursive: true });
 
+  if (options?.copyFrom) {
+    copyBaseConfig(options.copyFrom, profileDir, options.categories ?? DEFAULT_COPY_CATEGORIES);
+  }
+
   config.profiles[name] = { config_dir: profileDir };
 
   if (!config.default) {
@@ -38,12 +61,18 @@ export function addProfile(name: string, baseDirOverride?: string): string {
   return profileDir;
 }
 
-export function removeProfile(name: string, baseDirOverride?: string): void {
+export function removeProfile(
+  name: string,
+  baseDirOverride?: string,
+  options?: { keepDir?: boolean },
+): void {
   const config = loadConfig(baseDirOverride);
 
   if (!config.profiles[name]) {
     throw new Error(`Profile "${name}" does not exist.`);
   }
+
+  const profileDir = config.profiles[name].config_dir;
 
   delete config.profiles[name];
   config.rules = config.rules.filter((r) => r.profile !== name);
@@ -54,6 +83,10 @@ export function removeProfile(name: string, baseDirOverride?: string): void {
   }
 
   saveConfig(config, baseDirOverride);
+
+  if (!options?.keepDir && fs.existsSync(profileDir)) {
+    fs.rmSync(profileDir, { recursive: true, force: true });
+  }
 }
 
 export function listProfiles(
@@ -84,4 +117,45 @@ export function setDefault(name: string, baseDirOverride?: string): void {
 export function getDefault(baseDirOverride?: string): string | undefined {
   const config = loadConfig(baseDirOverride);
   return config.default;
+}
+
+export function duplicateProfile(
+  sourceName: string,
+  targetName: string,
+  baseDirOverride?: string,
+): string {
+  validateProfileName(targetName);
+
+  const config = loadConfig(baseDirOverride);
+
+  if (!config.profiles[sourceName]) {
+    throw new Error(`Source profile "${sourceName}" does not exist.`);
+  }
+
+  if (config.profiles[targetName]) {
+    throw new Error(`Profile "${targetName}" already exists.`);
+  }
+
+  const sourceDir = config.profiles[sourceName].config_dir;
+  const targetDir = getProfileDir(targetName, baseDirOverride);
+  if (fs.existsSync(sourceDir)) {
+    copyDir(sourceDir, targetDir);
+  } else {
+    fs.mkdirSync(targetDir, { recursive: true });
+  }
+
+  config.profiles[targetName] = { config_dir: targetDir };
+  saveConfig(config, baseDirOverride);
+
+  return targetDir;
+}
+
+export function resetProfile(name: string, baseDirOverride?: string): void {
+  const config = loadConfig(baseDirOverride);
+
+  if (!config.profiles[name]) {
+    throw new Error(`Profile "${name}" does not exist.`);
+  }
+
+  resetProfileDir(config.profiles[name].config_dir);
 }
