@@ -44,6 +44,14 @@ export function expandTilde(filepath: string): string {
   return filepath;
 }
 
+export function getClaudeBaseDir(): string {
+  const envDir = process.env.CLAUDE_CONFIG_DIR;
+  if (envDir && envDir.trim() !== "") {
+    return path.resolve(expandTilde(envDir));
+  }
+  return path.join(os.homedir(), ".claude");
+}
+
 export function loadConfig(baseDirOverride?: string): Config {
   const configPath = getConfigPath(baseDirOverride);
 
