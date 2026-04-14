@@ -231,6 +231,21 @@ describe("duplicateProfile", () => {
     addProfile("work", tmpDir);
     expect(() => duplicateProfile("work", "123bad", tmpDir)).toThrow("Invalid profile name");
   });
+
+  it("preserves auth fields in .claude.json", () => {
+    const profileDir = addProfile("work", tmpDir);
+    fs.writeFileSync(
+      path.join(profileDir, ".claude.json"),
+      JSON.stringify({ oauthAccount: { token: "secret" }, userID: "u123", theme: "dark" }),
+    );
+
+    const targetDir = duplicateProfile("work", "work-copy", tmpDir);
+
+    const result = JSON.parse(fs.readFileSync(path.join(targetDir, ".claude.json"), "utf-8"));
+    expect(result.oauthAccount).toEqual({ token: "secret" });
+    expect(result.userID).toBe("u123");
+    expect(result.theme).toBe("dark");
+  });
 });
 
 describe("resetProfile", () => {
