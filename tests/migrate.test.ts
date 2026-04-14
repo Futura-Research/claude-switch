@@ -5,6 +5,7 @@ import * as os from "node:os";
 import {
   copyBaseConfig,
   copyDir,
+  ensureProjectsLink,
   resetProfileDir,
   stripAuthFromClaudeJson,
 } from "../src/migrate.js";
@@ -269,6 +270,55 @@ describe("copyDir", () => {
     copyDir(src, path.join(tmpDir, "nested", "deep", "dst"));
 
     expect(fs.existsSync(path.join(tmpDir, "nested", "deep", "dst", "file.txt"))).toBe(true);
+  });
+});
+
+describe("ensureProjectsLink", () => {
+  it("creates a symlink to the shared projects dir", () => {
+    const profileDir = path.join(tmpDir, "profile");
+    const sharedDir = path.join(tmpDir, "shared");
+    fs.mkdirSync(profileDir);
+
+    ensureProjectsLink(profileDir, sharedDir);
+
+    const linkPath = path.join(profileDir, "projects");
+    expect(fs.lstatSync(linkPath).isSymbolicLink()).toBe(true);
+    expect(fs.readlinkSync(linkPath)).toBe(path.join(sharedDir, "projects"));
+  });
+
+  it("creates the shared projects dir if it does not exist", () => {
+    const profileDir = path.join(tmpDir, "profile");
+    const sharedDir = path.join(tmpDir, "shared");
+    fs.mkdirSync(profileDir);
+
+    ensureProjectsLink(profileDir, sharedDir);
+
+    expect(fs.existsSync(path.join(sharedDir, "projects"))).toBe(true);
+  });
+
+  it("does not touch an existing real projects directory", () => {
+    const profileDir = path.join(tmpDir, "profile");
+    const sharedDir = path.join(tmpDir, "shared");
+    fs.mkdirSync(path.join(profileDir, "projects"), { recursive: true });
+    fs.writeFileSync(path.join(profileDir, "projects", "chat.json"), "{}");
+
+    ensureProjectsLink(profileDir, sharedDir);
+
+    expect(fs.lstatSync(path.join(profileDir, "projects")).isSymbolicLink()).toBe(false);
+    expect(fs.existsSync(path.join(profileDir, "projects", "chat.json"))).toBe(true);
+  });
+
+  it("does not touch an existing symlink", () => {
+    const profileDir = path.join(tmpDir, "profile");
+    const sharedDir = path.join(tmpDir, "shared");
+    const otherTarget = path.join(tmpDir, "other-projects");
+    fs.mkdirSync(profileDir);
+    fs.mkdirSync(otherTarget);
+    fs.symlinkSync(otherTarget, path.join(profileDir, "projects"));
+
+    ensureProjectsLink(profileDir, sharedDir);
+
+    expect(fs.readlinkSync(path.join(profileDir, "projects"))).toBe(otherTarget);
   });
 });
 
