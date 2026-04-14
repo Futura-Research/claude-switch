@@ -45,6 +45,10 @@ describe("getConfigPath", () => {
   it("returns config.json inside base dir", () => {
     expect(getConfigPath(tmpDir)).toBe(path.join(tmpDir, "config.json"));
   });
+
+  it("defaults to ~/.claude-switch when no override provided", () => {
+    expect(getConfigPath()).toBe(path.join(os.homedir(), ".claude-switch", "config.json"));
+  });
 });
 
 describe("getProfileDir", () => {

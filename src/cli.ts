@@ -12,7 +12,7 @@ import { resolveProfile, parseArgs } from "./resolver.js";
 import { launch } from "./launcher.js";
 import { copyBaseConfig } from "./migrate.js";
 
-const VERSION = "1.0.0";
+const VERSION = "1.1.0";
 
 export function printUsage(): void {
   console.log(

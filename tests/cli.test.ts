@@ -303,6 +303,26 @@ describe("handleCopyConfig", () => {
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
+  it("reports nothing to copy when source is empty", () => {
+    addProfile("work", tmpDir);
+    const emptyDir = path.join(tmpDir, "empty-claude");
+    fs.mkdirSync(emptyDir);
+
+    const origEnv = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = emptyDir;
+    try {
+      handleCopyConfig(["work"], tmpDir);
+    } finally {
+      if (origEnv !== undefined) {
+        process.env.CLAUDE_CONFIG_DIR = origEnv;
+      } else {
+        delete process.env.CLAUDE_CONFIG_DIR;
+      }
+    }
+
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Nothing to copy"));
+  });
+
   it("dispatches correctly via run", () => {
     addProfile("work", tmpDir);
     const fakeClaudeDir = path.join(tmpDir, "fake-claude");
