@@ -1,5 +1,12 @@
 import { initConfig, loadConfig, getClaudeBaseDir } from "./config.js";
-import { addProfile, removeProfile, listProfiles, setDefault, resetProfile } from "./profiles.js";
+import {
+  addProfile,
+  removeProfile,
+  listProfiles,
+  setDefault,
+  resetProfile,
+  duplicateProfile,
+} from "./profiles.js";
 import { addRule, removeRule, listRules } from "./rules.js";
 import { resolveProfile, parseArgs } from "./resolver.js";
 import { launch } from "./launcher.js";
@@ -167,6 +174,19 @@ export function handleCopyConfig(args: string[], baseDirOverride?: string): void
   });
 }
 
+export function handleDuplicate(args: string[], baseDirOverride?: string): void {
+  const source = args[0];
+  const target = args[1];
+  if (!source || !target) {
+    console.error("Usage: claude-switch duplicate <source> <new-name>");
+    process.exit(1);
+  }
+  runWithErrorHandling(() => {
+    duplicateProfile(source, target, baseDirOverride);
+    console.log(`Profile "${target}" created as a copy of "${source}".`);
+  });
+}
+
 export function handleReset(args: string[], baseDirOverride?: string): void {
   const name = requireName(args, "Usage: claude-switch reset <profile>");
   runWithErrorHandling(() => {
@@ -211,6 +231,7 @@ export function run(argv: string[], baseDirOverride?: string): void {
     rule: (args) => handleRule(args, baseDirOverride),
     "copy-config": (args) => handleCopyConfig(args, baseDirOverride),
     reset: (args) => handleReset(args, baseDirOverride),
+    duplicate: (args) => handleDuplicate(args, baseDirOverride),
     which: () => handleWhich(baseDirOverride),
     "--help": () => printUsage(),
     "-h": () => printUsage(),
