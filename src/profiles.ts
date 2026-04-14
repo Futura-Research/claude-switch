@@ -94,3 +94,31 @@ export function getDefault(baseDirOverride?: string): string | undefined {
   const config = loadConfig(baseDirOverride);
   return config.default;
 }
+
+export function duplicateProfile(
+  sourceName: string,
+  targetName: string,
+  baseDirOverride?: string,
+): string {
+  validateProfileName(targetName);
+
+  const config = loadConfig(baseDirOverride);
+
+  if (!config.profiles[sourceName]) {
+    throw new Error(`Source profile "${sourceName}" does not exist.`);
+  }
+
+  if (config.profiles[targetName]) {
+    throw new Error(`Profile "${targetName}" already exists.`);
+  }
+
+  const sourceDir = config.profiles[sourceName].config_dir;
+  const targetDir = getProfileDir(targetName, baseDirOverride);
+  fs.mkdirSync(targetDir, { recursive: true });
+  copyBaseConfig(sourceDir, targetDir);
+
+  config.profiles[targetName] = { config_dir: targetDir };
+  saveConfig(config, baseDirOverride);
+
+  return targetDir;
+}
