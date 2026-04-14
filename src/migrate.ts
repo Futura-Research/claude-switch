@@ -39,6 +39,20 @@ export const COPY_CATEGORIES: Record<
   },
 };
 
+export function copyDir(src: string, dst: string): void {
+  fs.mkdirSync(dst, { recursive: true });
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    if (entry.name === ".git") continue;
+    const srcPath = path.join(src, entry.name);
+    const dstPath = path.join(dst, entry.name);
+    if (entry.isDirectory()) {
+      copyDir(srcPath, dstPath);
+    } else {
+      fs.copyFileSync(srcPath, dstPath);
+    }
+  }
+}
+
 export const AUTH_FIELDS = ["oauthAccount", "userID"] as const;
 
 export function stripAuthFromClaudeJson(dir: string): void {
@@ -86,7 +100,7 @@ export function copyBaseConfig(
       const dstPath = path.join(targetDir, relPath);
       if (!fs.existsSync(srcPath)) continue;
       if (fs.statSync(srcPath).isDirectory()) {
-        fs.cpSync(srcPath, dstPath, { recursive: true, force: true });
+        copyDir(srcPath, dstPath);
       } else {
         fs.copyFileSync(srcPath, dstPath);
       }
