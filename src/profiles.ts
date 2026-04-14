@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import { loadConfig, saveConfig, getProfileDir } from "./config.js";
+import { copyBaseConfig } from "./migrate.js";
 
 const RESERVED_NAMES = ["help", "version", "add", "remove", "list", "default", "rule", "which"];
 
@@ -16,7 +17,11 @@ function validateProfileName(name: string): void {
   }
 }
 
-export function addProfile(name: string, baseDirOverride?: string): string {
+export function addProfile(
+  name: string,
+  baseDirOverride?: string,
+  options?: { copyFrom?: string },
+): string {
   validateProfileName(name);
 
   const config = loadConfig(baseDirOverride);
@@ -27,6 +32,10 @@ export function addProfile(name: string, baseDirOverride?: string): string {
 
   const profileDir = getProfileDir(name, baseDirOverride);
   fs.mkdirSync(profileDir, { recursive: true });
+
+  if (options?.copyFrom) {
+    copyBaseConfig(options.copyFrom, profileDir);
+  }
 
   config.profiles[name] = { config_dir: profileDir };
 
