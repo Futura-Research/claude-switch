@@ -17,6 +17,7 @@ import {
   handleDefault,
   handleRule,
   handleCopyConfig,
+  handleReset,
   handleWhich,
   launchClaude,
 } from "../src/cli.js";
@@ -320,6 +321,35 @@ describe("handleCopyConfig", () => {
     }
 
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Copied config from"));
+  });
+});
+
+describe("handleReset", () => {
+  it("resets existing profile", () => {
+    const profileDir = addProfile("work", tmpDir);
+    fs.writeFileSync(path.join(profileDir, "settings.json"), "{}");
+
+    handleReset(["work"], tmpDir);
+
+    expect(logSpy).toHaveBeenCalledWith('Profile "work" has been reset.');
+    expect(fs.readdirSync(profileDir)).toHaveLength(0);
+  });
+
+  it("exits with error when profile does not exist", () => {
+    handleReset(["nonexistent"], tmpDir);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("does not exist"));
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it("exits with error when name is missing", () => {
+    handleReset([], tmpDir);
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it("dispatches correctly via run", () => {
+    addProfile("work", tmpDir);
+    run(["reset", "work"], tmpDir);
+    expect(logSpy).toHaveBeenCalledWith('Profile "work" has been reset.');
   });
 });
 
