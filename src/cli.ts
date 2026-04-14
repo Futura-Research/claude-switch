@@ -11,6 +11,7 @@ import { addRule, removeRule, listRules } from "./rules.js";
 import { resolveProfile, parseArgs } from "./resolver.js";
 import { launch } from "./launcher.js";
 import { copyBaseConfig } from "./migrate.js";
+import { confirm } from "./prompt.js";
 
 const VERSION = "1.1.0";
 
@@ -57,18 +58,29 @@ export function runWithErrorHandling(fn: () => void): void {
   }
 }
 
-export function handleAdd(args: string[], baseDirOverride?: string): void {
+export async function handleAdd(args: string[], baseDirOverride?: string): Promise<void> {
   const noCopy = args.includes("--no-copy");
   const filtered = args.filter((a) => a !== "--no-copy");
   const name = requireName(filtered, "Usage: claude-switch add <name> [--no-copy]");
   initConfig(baseDirOverride);
 
+  let copyFrom: string | undefined;
+  if (!noCopy) {
+    const baseDir = getClaudeBaseDir();
+    const fs = await import("node:fs");
+    if (fs.existsSync(baseDir) && fs.readdirSync(baseDir).length > 0) {
+      const shouldCopy = await confirm("  Copy existing Claude settings to new profile? (Y/n) ");
+      if (shouldCopy) {
+        copyFrom = baseDir;
+      }
+    }
+  }
+
   runWithErrorHandling(() => {
-    const copyFrom = noCopy ? undefined : getClaudeBaseDir();
     const profileDir = addProfile(name, baseDirOverride, copyFrom ? { copyFrom } : undefined);
     console.log(`\n  Creating profile "${name}"...`);
     console.log(`  Config directory: ${profileDir}\n`);
-    if (!noCopy && copyFrom) {
+    if (copyFrom) {
       console.log(`  Copied settings from ${copyFrom}`);
     }
     console.log("  Launching Claude Code to authenticate...");
@@ -220,13 +232,13 @@ export function printVersion(): void {
   console.log(`claude-switch ${VERSION}`);
 }
 
-export function run(argv: string[], baseDirOverride?: string): void {
+export function run(argv: string[], baseDirOverride?: string): void | Promise<void> {
   if (argv.length === 0) {
     launchClaude([], baseDirOverride);
     return;
   }
 
-  const commands: Record<string, ((args: string[]) => void) | undefined> = {
+  const commands: Record<string, ((args: string[]) => void | Promise<void>) | undefined> = {
     add: (args) => handleAdd(args, baseDirOverride),
     remove: (args) => handleRemove(args, baseDirOverride),
     list: () => handleList(baseDirOverride),
@@ -244,7 +256,7 @@ export function run(argv: string[], baseDirOverride?: string): void {
 
   const handler = commands[argv[0]];
   if (handler) {
-    handler(argv.slice(1));
+    return handler(argv.slice(1));
   } else {
     launchClaude(argv, baseDirOverride);
   }
