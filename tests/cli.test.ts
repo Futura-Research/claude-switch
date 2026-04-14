@@ -16,6 +16,7 @@ import {
   handleList,
   handleDefault,
   handleRule,
+  handleCopyConfig,
   handleWhich,
   launchClaude,
 } from "../src/cli.js";
@@ -262,6 +263,63 @@ describe("handleRule", () => {
     handleRule(["unknown"], tmpDir);
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("Usage: claude-switch rule"));
     expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+});
+
+describe("handleCopyConfig", () => {
+  it("copies base config to existing profile", () => {
+    addProfile("work", tmpDir);
+    const fakeClaudeDir = path.join(tmpDir, "fake-claude");
+    fs.mkdirSync(fakeClaudeDir);
+    fs.writeFileSync(path.join(fakeClaudeDir, "settings.json"), '{"key":"val"}');
+
+    const origEnv = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = fakeClaudeDir;
+    try {
+      handleCopyConfig(["work"], tmpDir);
+    } finally {
+      if (origEnv !== undefined) {
+        process.env.CLAUDE_CONFIG_DIR = origEnv;
+      } else {
+        delete process.env.CLAUDE_CONFIG_DIR;
+      }
+    }
+
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Copied config from"));
+    const profileDir = path.join(tmpDir, "profiles", "work");
+    expect(fs.readFileSync(path.join(profileDir, "settings.json"), "utf-8")).toBe('{"key":"val"}');
+  });
+
+  it("exits with error when profile does not exist", () => {
+    handleCopyConfig(["nonexistent"], tmpDir);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("does not exist"));
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it("exits with error when name is missing", () => {
+    handleCopyConfig([], tmpDir);
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it("dispatches correctly via run", () => {
+    addProfile("work", tmpDir);
+    const fakeClaudeDir = path.join(tmpDir, "fake-claude");
+    fs.mkdirSync(fakeClaudeDir);
+    fs.writeFileSync(path.join(fakeClaudeDir, "file.txt"), "data");
+
+    const origEnv = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = fakeClaudeDir;
+    try {
+      run(["copy-config", "work"], tmpDir);
+    } finally {
+      if (origEnv !== undefined) {
+        process.env.CLAUDE_CONFIG_DIR = origEnv;
+      } else {
+        delete process.env.CLAUDE_CONFIG_DIR;
+      }
+    }
+
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Copied config from"));
   });
 });
 
