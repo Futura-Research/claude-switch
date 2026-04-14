@@ -22,10 +22,13 @@ claude-switch — Switch between multiple Claude Code accounts
 Usage:
   claude-switch --<profile> [claude flags...]    Launch claude with a profile
   claude-switch [claude flags...]                Auto-detect profile from cwd
-  claude-switch add <name>                       Add a new profile
+  claude-switch add <name> [--no-copy]           Add a new profile (copies settings by default)
   claude-switch remove <name>                    Remove a profile
   claude-switch list                             List all profiles
   claude-switch default <name>                   Set the default profile
+  claude-switch copy-config <name>               Copy base Claude config to a profile
+  claude-switch reset <name>                     Reset a profile to clean slate
+  claude-switch duplicate <source> <new-name>    Duplicate a profile under a new name
   claude-switch rule add <dir> <profile>         Add a directory rule
   claude-switch rule remove <dir>                Remove a directory rule
   claude-switch rule list                        List all rules
