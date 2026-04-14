@@ -54,6 +54,9 @@ describe("addProfile", () => {
     expect(() => addProfile("help", tmpDir)).toThrow("reserved name");
     expect(() => addProfile("version", tmpDir)).toThrow("reserved name");
     expect(() => addProfile("add", tmpDir)).toThrow("reserved name");
+    expect(() => addProfile("copy-config", tmpDir)).toThrow("reserved name");
+    expect(() => addProfile("reset", tmpDir)).toThrow("reserved name");
+    expect(() => addProfile("duplicate", tmpDir)).toThrow("reserved name");
   });
 
   it("throws on invalid name format", () => {
