@@ -127,7 +127,7 @@ export function duplicateProfile(
   const sourceDir = config.profiles[sourceName].config_dir;
   const targetDir = getProfileDir(targetName, baseDirOverride);
   fs.mkdirSync(targetDir, { recursive: true });
-  copyBaseConfig(sourceDir, targetDir);
+  copyBaseConfig(sourceDir, targetDir, { stripAuth: false });
 
   config.profiles[targetName] = { config_dir: targetDir };
   saveConfig(config, baseDirOverride);
