@@ -276,45 +276,45 @@ describe("run", () => {
   });
 
   it("dispatches list command", () => {
-    run(["list"]);
+    run(["list"], tmpDir);
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("No profiles configured"));
   });
 
   it("dispatches add command", () => {
-    run(["add"]);
+    run(["add"], tmpDir);
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
   it("dispatches remove command", () => {
-    run(["remove"]);
+    run(["remove"], tmpDir);
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
   it("dispatches default command", () => {
-    run(["default"]);
+    run(["default"], tmpDir);
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
   it("dispatches rule command", () => {
-    run(["rule", "list"]);
+    run(["rule", "list"], tmpDir);
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("No rules configured"));
   });
 
   it("dispatches which command", () => {
-    run(["which"]);
+    run(["which"], tmpDir);
     // No profiles, so it should error
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
   it("falls through to launchClaude for unknown commands", () => {
     // No profiles configured, so launchClaude will error
-    run(["--some-unknown-flag"]);
+    run(["--some-unknown-flag"], tmpDir);
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
   it("calls launchClaude with empty args when no args given", () => {
     // No profiles, so it will error
-    run([]);
+    run([], tmpDir);
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 });

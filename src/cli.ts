@@ -163,19 +163,19 @@ export function printVersion(): void {
   console.log(`claude-switch ${VERSION}`);
 }
 
-export function run(argv: string[]): void {
+export function run(argv: string[], baseDirOverride?: string): void {
   if (argv.length === 0) {
-    launchClaude([]);
+    launchClaude([], baseDirOverride);
     return;
   }
 
   const commands: Record<string, ((args: string[]) => void) | undefined> = {
-    add: (args) => handleAdd(args),
-    remove: (args) => handleRemove(args),
-    list: () => handleList(),
-    default: (args) => handleDefault(args),
-    rule: (args) => handleRule(args),
-    which: () => handleWhich(),
+    add: (args) => handleAdd(args, baseDirOverride),
+    remove: (args) => handleRemove(args, baseDirOverride),
+    list: () => handleList(baseDirOverride),
+    default: (args) => handleDefault(args, baseDirOverride),
+    rule: (args) => handleRule(args, baseDirOverride),
+    which: () => handleWhich(baseDirOverride),
     "--help": () => printUsage(),
     "-h": () => printUsage(),
     "--version": () => printVersion(),
@@ -186,6 +186,6 @@ export function run(argv: string[]): void {
   if (handler) {
     handler(argv.slice(1));
   } else {
-    launchClaude(argv);
+    launchClaude(argv, baseDirOverride);
   }
 }
