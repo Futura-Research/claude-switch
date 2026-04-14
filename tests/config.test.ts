@@ -9,6 +9,7 @@ import {
   getConfigPath,
   getProfileDir,
   expandTilde,
+  getClaudeBaseDir,
 } from "../src/config.js";
 
 let tmpDir: string;
@@ -115,5 +116,46 @@ describe("initConfig", () => {
 
     const config = initConfig(tmpDir);
     expect(config.profiles.work).toBeDefined();
+  });
+});
+
+describe("getClaudeBaseDir", () => {
+  let originalEnv: string | undefined;
+
+  beforeEach(() => {
+    originalEnv = process.env.CLAUDE_CONFIG_DIR;
+    delete process.env.CLAUDE_CONFIG_DIR;
+  });
+
+  afterEach(() => {
+    if (originalEnv !== undefined) {
+      process.env.CLAUDE_CONFIG_DIR = originalEnv;
+    } else {
+      delete process.env.CLAUDE_CONFIG_DIR;
+    }
+  });
+
+  it("returns ~/.claude by default", () => {
+    expect(getClaudeBaseDir()).toBe(path.join(os.homedir(), ".claude"));
+  });
+
+  it("returns CLAUDE_CONFIG_DIR env var when set", () => {
+    process.env.CLAUDE_CONFIG_DIR = "/custom/claude/dir";
+    expect(getClaudeBaseDir()).toBe("/custom/claude/dir");
+  });
+
+  it("expands tilde in CLAUDE_CONFIG_DIR", () => {
+    process.env.CLAUDE_CONFIG_DIR = "~/my-claude";
+    expect(getClaudeBaseDir()).toBe(path.join(os.homedir(), "my-claude"));
+  });
+
+  it("ignores empty CLAUDE_CONFIG_DIR", () => {
+    process.env.CLAUDE_CONFIG_DIR = "";
+    expect(getClaudeBaseDir()).toBe(path.join(os.homedir(), ".claude"));
+  });
+
+  it("ignores whitespace-only CLAUDE_CONFIG_DIR", () => {
+    process.env.CLAUDE_CONFIG_DIR = "   ";
+    expect(getClaudeBaseDir()).toBe(path.join(os.homedir(), ".claude"));
   });
 });
