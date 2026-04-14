@@ -2,7 +2,12 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
-import { copyBaseConfig, resetProfileDir, stripAuthFromClaudeJson } from "../src/migrate.js";
+import {
+  copyBaseConfig,
+  copyDir,
+  resetProfileDir,
+  stripAuthFromClaudeJson,
+} from "../src/migrate.js";
 
 let tmpDir: string;
 
@@ -211,6 +216,59 @@ describe("stripAuthFromClaudeJson", () => {
 
     expect(() => stripAuthFromClaudeJson(dir)).not.toThrow();
     expect(fs.readFileSync(path.join(dir, ".claude.json"), "utf-8")).toBe("not-json");
+  });
+});
+
+describe("copyDir", () => {
+  it("copies files and subdirectories recursively", () => {
+    const src = path.join(tmpDir, "src");
+    const dst = path.join(tmpDir, "dst");
+    fs.mkdirSync(path.join(src, "sub"), { recursive: true });
+    fs.writeFileSync(path.join(src, "file.txt"), "data");
+    fs.writeFileSync(path.join(src, "sub", "deep.txt"), "deep");
+
+    copyDir(src, dst);
+
+    expect(fs.readFileSync(path.join(dst, "file.txt"), "utf-8")).toBe("data");
+    expect(fs.readFileSync(path.join(dst, "sub", "deep.txt"), "utf-8")).toBe("deep");
+  });
+
+  it("skips .git directories", () => {
+    const src = path.join(tmpDir, "src");
+    fs.mkdirSync(path.join(src, ".git", "objects"), { recursive: true });
+    fs.writeFileSync(path.join(src, ".git", "objects", "abc"), "blob");
+    fs.writeFileSync(path.join(src, "plugin.js"), "code");
+
+    const dst = path.join(tmpDir, "dst");
+    copyDir(src, dst);
+
+    expect(fs.existsSync(path.join(dst, ".git"))).toBe(false);
+    expect(fs.readFileSync(path.join(dst, "plugin.js"), "utf-8")).toBe("code");
+  });
+
+  it("skips nested .git directories", () => {
+    const src = path.join(tmpDir, "src");
+    fs.mkdirSync(path.join(src, "plugins", "my-plugin", ".git", "objects"), { recursive: true });
+    fs.writeFileSync(path.join(src, "plugins", "my-plugin", ".git", "objects", "ff"), "blob");
+    fs.writeFileSync(path.join(src, "plugins", "my-plugin", "index.js"), "export default {}");
+
+    const dst = path.join(tmpDir, "dst");
+    copyDir(src, dst);
+
+    expect(fs.existsSync(path.join(dst, "plugins", "my-plugin", ".git"))).toBe(false);
+    expect(fs.readFileSync(path.join(dst, "plugins", "my-plugin", "index.js"), "utf-8")).toBe(
+      "export default {}",
+    );
+  });
+
+  it("creates destination directory if it does not exist", () => {
+    const src = path.join(tmpDir, "src");
+    fs.mkdirSync(src);
+    fs.writeFileSync(path.join(src, "file.txt"), "data");
+
+    copyDir(src, path.join(tmpDir, "nested", "deep", "dst"));
+
+    expect(fs.existsSync(path.join(tmpDir, "nested", "deep", "dst", "file.txt"))).toBe(true);
   });
 });
 
