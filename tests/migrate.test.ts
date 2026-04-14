@@ -36,12 +36,12 @@ describe("copyBaseConfig", () => {
   it("copies directories for selected categories", () => {
     const source = path.join(tmpDir, "source");
     const target = path.join(tmpDir, "target");
-    fs.mkdirSync(path.join(source, "projects"), { recursive: true });
-    fs.writeFileSync(path.join(source, "projects", "memo.md"), "notes");
+    fs.mkdirSync(path.join(source, "sessions"), { recursive: true });
+    fs.writeFileSync(path.join(source, "sessions", "abc.json"), "{}");
 
     copyBaseConfig(source, target, ["history"]);
 
-    expect(fs.readFileSync(path.join(target, "projects", "memo.md"), "utf-8")).toBe("notes");
+    expect(fs.readFileSync(path.join(target, "sessions", "abc.json"), "utf-8")).toBe("{}");
   });
 
   it("only copies paths for the selected categories", () => {
