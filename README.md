@@ -61,11 +61,65 @@ claude-switch --dangerously-skip-permissions  # same, with flags
 ### Profile management
 
 ```bash
-claude-switch add <name>        # Create profile + authenticate
-claude-switch remove <name>     # Remove a profile
-claude-switch list              # List all profiles
-claude-switch default <name>    # Set the default profile
+claude-switch add <name>             # Create profile + authenticate
+claude-switch add <name> --no-copy   # Create profile without copying existing settings
+claude-switch remove <name>          # Remove a profile and delete its config directory
+claude-switch remove <name> --keep-dir  # Remove but keep the config directory on disk
+claude-switch list                   # List all profiles
+claude-switch default <name>         # Set the default profile
 ```
+
+When you create a profile, `claude-switch` asks whether to copy your existing Claude config and — if yes — which categories to include:
+
+```
+$ claude-switch add work
+  Copy existing Claude settings to new profile? (Y/n)
+
+  What would you like to copy?
+
+  Settings — Theme, model, and general preferences (Y/n)
+  Skills & commands — Custom skills, slash commands, and plugins (Y/n)
+  IDE settings — VS Code / JetBrains integration config (Y/n)
+  Conversation history — Resume sessions and command history (y/N)
+  In-progress work — Plans, tasks, and todos (y/N)
+```
+
+Auth credentials (`oauthAccount`) are always stripped from the copied config — the new profile will prompt for its own login. Use `--no-copy` to skip all prompts and create a completely clean profile.
+
+### Copy, reset & duplicate
+
+Manage profile config state at any time:
+
+```bash
+claude-switch copy-config <name>             # Copy base Claude config into a profile
+claude-switch reset <name>                   # Wipe a profile's config (keeps profile registered)
+claude-switch duplicate <source> <new-name>  # Clone a profile under a new name
+```
+
+**Copy config** prompts for the same category selection as `add`, then copies only the chosen items from `~/.claude` into the profile. Auth credentials are stripped automatically.
+
+```bash
+claude-switch copy-config work
+```
+
+**Reset** wipes the profile directory clean but keeps it registered — you can then re-authenticate or copy config back in:
+
+```bash
+claude-switch reset work          # clean slate
+claude-switch copy-config work    # restore from base config
+```
+
+**Duplicate** creates a new profile that's an exact clone of an existing one — all data including auth is preserved, and `.git` directories inside plugins are excluded to avoid permission errors:
+
+```bash
+claude-switch duplicate work work-staging
+```
+
+### Shared project history
+
+All profiles share a single `projects/` directory at `~/.claude-switch/shared/projects/`. This avoids duplicating the 1GB+ of conversation history that Claude stores per directory.
+
+The symlink is created automatically on first launch or profile creation. Existing profiles that already have a real `projects/` directory are left untouched.
 
 ### Directory rules
 

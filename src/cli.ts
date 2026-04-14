@@ -1,10 +1,24 @@
-import { initConfig, loadConfig } from "./config.js";
-import { addProfile, removeProfile, listProfiles, setDefault } from "./profiles.js";
+import { initConfig, loadConfig, getClaudeBaseDir, getSharedDir } from "./config.js";
+import {
+  addProfile,
+  removeProfile,
+  listProfiles,
+  setDefault,
+  resetProfile,
+  duplicateProfile,
+} from "./profiles.js";
 import { addRule, removeRule, listRules } from "./rules.js";
 import { resolveProfile, parseArgs } from "./resolver.js";
 import { launch } from "./launcher.js";
+import {
+  copyBaseConfig,
+  ensureProjectsLink,
+  COPY_CATEGORIES,
+  type CopyCategory,
+} from "./migrate.js";
+import { confirm } from "./prompt.js";
 
-const VERSION = "1.0.0";
+const VERSION = "1.1.0";
 
 export function printUsage(): void {
   console.log(
@@ -14,10 +28,13 @@ claude-switch — Switch between multiple Claude Code accounts
 Usage:
   claude-switch --<profile> [claude flags...]    Launch claude with a profile
   claude-switch [claude flags...]                Auto-detect profile from cwd
-  claude-switch add <name>                       Add a new profile
-  claude-switch remove <name>                    Remove a profile
+  claude-switch add <name> [--no-copy]           Add a new profile (copies settings by default)
+  claude-switch remove <name> [--keep-dir]        Remove a profile (deletes config dir by default)
   claude-switch list                             List all profiles
   claude-switch default <name>                   Set the default profile
+  claude-switch copy-config <name>               Copy base Claude config to a profile
+  claude-switch reset <name>                     Reset a profile to clean slate
+  claude-switch duplicate <source> <new-name>    Duplicate a profile under a new name
   claude-switch rule add <dir> <profile>         Add a directory rule
   claude-switch rule remove <dir>                Remove a directory rule
   claude-switch rule list                        List all rules
@@ -46,14 +63,38 @@ export function runWithErrorHandling(fn: () => void): void {
   }
 }
 
-export function handleAdd(args: string[], baseDirOverride?: string): void {
-  const name = requireName(args, "Usage: claude-switch add <name>");
+export async function handleAdd(args: string[], baseDirOverride?: string): Promise<void> {
+  const noCopy = args.includes("--no-copy");
+  const filtered = args.filter((a) => a !== "--no-copy");
+  const name = requireName(filtered, "Usage: claude-switch add <name> [--no-copy]");
   initConfig(baseDirOverride);
 
+  let copyFrom: string | undefined;
+  let copyCategories: CopyCategory[] | undefined;
+  if (!noCopy) {
+    const baseDir = getClaudeBaseDir();
+    const fs = await import("node:fs");
+    if (fs.existsSync(baseDir) && fs.readdirSync(baseDir).length > 0) {
+      const shouldCopy = await confirm("  Copy existing Claude settings to new profile? (Y/n) ");
+      if (shouldCopy) {
+        copyFrom = baseDir;
+        copyCategories = await promptCopyCategories(baseDir);
+      }
+    }
+  }
+
   runWithErrorHandling(() => {
-    const profileDir = addProfile(name, baseDirOverride);
+    const profileDir = addProfile(
+      name,
+      baseDirOverride,
+      copyFrom && copyCategories?.length ? { copyFrom, categories: copyCategories } : undefined,
+    );
+    ensureProjectsLink(profileDir, getSharedDir(baseDirOverride));
     console.log(`\n  Creating profile "${name}"...`);
     console.log(`  Config directory: ${profileDir}\n`);
+    if (copyFrom && copyCategories?.length) {
+      console.log(`  Copied settings from ${copyFrom}`);
+    }
     console.log("  Launching Claude Code to authenticate...");
     console.log("  (complete the login flow in your browser)\n");
 
@@ -62,9 +103,11 @@ export function handleAdd(args: string[], baseDirOverride?: string): void {
 }
 
 export function handleRemove(args: string[], baseDirOverride?: string): void {
-  const name = requireName(args, "Usage: claude-switch remove <name>");
+  const keepDir = args.includes("--keep-dir");
+  const filtered = args.filter((a) => a !== "--keep-dir");
+  const name = requireName(filtered, "Usage: claude-switch remove <name> [--keep-dir]");
   runWithErrorHandling(() => {
-    removeProfile(name, baseDirOverride);
+    removeProfile(name, baseDirOverride, { keepDir });
     console.log(`Profile "${name}" removed.`);
   });
 }
@@ -141,6 +184,82 @@ export function handleRule(args: string[], baseDirOverride?: string): void {
   }
 }
 
+export async function handleCopyConfig(args: string[], baseDirOverride?: string): Promise<void> {
+  const name = requireName(args, "Usage: claude-switch copy-config <profile>");
+
+  let profileDir: string;
+  try {
+    const config = loadConfig(baseDirOverride);
+    if (!config.profiles[name]) {
+      throw new Error(
+        `Profile "${name}" does not exist. Add it first with: claude-switch add ${name}`,
+      );
+    }
+    profileDir = config.profiles[name].config_dir;
+  } catch (err) {
+    console.error((err as Error).message);
+    process.exit(1);
+    return;
+  }
+
+  const fs = await import("node:fs");
+  const sourceDir = getClaudeBaseDir();
+  if (!fs.existsSync(sourceDir) || fs.readdirSync(sourceDir).length === 0) {
+    console.log(`Nothing to copy: source is empty or does not exist.`);
+    return;
+  }
+
+  const categories = await promptCopyCategories(sourceDir);
+  if (categories.length === 0) {
+    console.log("Nothing selected to copy.");
+    return;
+  }
+
+  const result = copyBaseConfig(sourceDir, profileDir, categories);
+  if (result.copied) {
+    console.log(`Copied config from "${sourceDir}" to profile "${name}".`);
+  } else {
+    console.log(`Nothing to copy: ${result.reason}.`);
+  }
+}
+
+export async function promptCopyCategories(sourceDir: string): Promise<CopyCategory[]> {
+  void sourceDir; // reserved for future size hints
+  console.log("\n  What would you like to copy?\n");
+  const selected: CopyCategory[] = [];
+  for (const [key, cat] of Object.entries(COPY_CATEGORIES) as [
+    CopyCategory,
+    (typeof COPY_CATEGORIES)[CopyCategory],
+  ][]) {
+    const hint = cat.defaultOn ? "Y/n" : "y/N";
+    const yes = await confirm(`  ${cat.label} — ${cat.description} (${hint}) `, cat.defaultOn);
+    if (yes) selected.push(key);
+  }
+  console.log();
+  return selected;
+}
+
+export function handleDuplicate(args: string[], baseDirOverride?: string): void {
+  const source = args[0];
+  const target = args[1];
+  if (!source || !target) {
+    console.error("Usage: claude-switch duplicate <source> <new-name>");
+    process.exit(1);
+  }
+  runWithErrorHandling(() => {
+    duplicateProfile(source, target, baseDirOverride);
+    console.log(`Profile "${target}" created as a copy of "${source}".`);
+  });
+}
+
+export function handleReset(args: string[], baseDirOverride?: string): void {
+  const name = requireName(args, "Usage: claude-switch reset <profile>");
+  runWithErrorHandling(() => {
+    resetProfile(name, baseDirOverride);
+    console.log(`Profile "${name}" has been reset.`);
+  });
+}
+
 export function handleWhich(baseDirOverride?: string): void {
   runWithErrorHandling(() => {
     const resolved = resolveProfile([], process.cwd(), baseDirOverride);
@@ -155,6 +274,7 @@ export function launchClaude(args: string[], baseDirOverride?: string): void {
     const resolved = resolveProfile(args, process.cwd(), baseDirOverride);
     const config = loadConfig(baseDirOverride);
     const { claudeArgs } = parseArgs(args, config);
+    ensureProjectsLink(resolved.configDir, getSharedDir(baseDirOverride));
     launch({ configDir: resolved.configDir, args: claudeArgs });
   });
 }
@@ -163,19 +283,22 @@ export function printVersion(): void {
   console.log(`claude-switch ${VERSION}`);
 }
 
-export function run(argv: string[]): void {
+export function run(argv: string[], baseDirOverride?: string): void | Promise<void> {
   if (argv.length === 0) {
-    launchClaude([]);
+    launchClaude([], baseDirOverride);
     return;
   }
 
-  const commands: Record<string, ((args: string[]) => void) | undefined> = {
-    add: (args) => handleAdd(args),
-    remove: (args) => handleRemove(args),
-    list: () => handleList(),
-    default: (args) => handleDefault(args),
-    rule: (args) => handleRule(args),
-    which: () => handleWhich(),
+  const commands: Record<string, ((args: string[]) => void | Promise<void>) | undefined> = {
+    add: (args) => handleAdd(args, baseDirOverride),
+    remove: (args) => handleRemove(args, baseDirOverride),
+    list: () => handleList(baseDirOverride),
+    default: (args) => handleDefault(args, baseDirOverride),
+    rule: (args) => handleRule(args, baseDirOverride),
+    "copy-config": (args) => handleCopyConfig(args, baseDirOverride),
+    reset: (args) => handleReset(args, baseDirOverride),
+    duplicate: (args) => handleDuplicate(args, baseDirOverride),
+    which: () => handleWhich(baseDirOverride),
     "--help": () => printUsage(),
     "-h": () => printUsage(),
     "--version": () => printVersion(),
@@ -184,8 +307,8 @@ export function run(argv: string[]): void {
 
   const handler = commands[argv[0]];
   if (handler) {
-    handler(argv.slice(1));
+    return handler(argv.slice(1));
   } else {
-    launchClaude(argv);
+    launchClaude(argv, baseDirOverride);
   }
 }
