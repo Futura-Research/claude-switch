@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
-import { copyBaseConfig, resetProfileDir } from "../src/migrate.js";
+import { copyBaseConfig, resetProfileDir, stripAuthFromClaudeJson } from "../src/migrate.js";
 
 let tmpDir: string;
 
@@ -82,6 +82,67 @@ describe("copyBaseConfig", () => {
 
     expect(fs.readFileSync(path.join(target, "a", "b", "c", "deep.txt"), "utf-8")).toBe("deep");
     expect(fs.readFileSync(path.join(target, "a", "top.txt"), "utf-8")).toBe("top");
+  });
+});
+
+describe("stripAuthFromClaudeJson", () => {
+  it("removes oauthAccount and userID from .claude.json", () => {
+    const dir = path.join(tmpDir, "profile");
+    fs.mkdirSync(dir);
+    fs.writeFileSync(
+      path.join(dir, ".claude.json"),
+      JSON.stringify({ oauthAccount: { token: "secret" }, userID: "u123", theme: "dark" }),
+    );
+
+    stripAuthFromClaudeJson(dir);
+
+    const result = JSON.parse(fs.readFileSync(path.join(dir, ".claude.json"), "utf-8"));
+    expect(result).not.toHaveProperty("oauthAccount");
+    expect(result).not.toHaveProperty("userID");
+    expect(result.theme).toBe("dark");
+  });
+
+  it("leaves other fields intact", () => {
+    const dir = path.join(tmpDir, "profile");
+    fs.mkdirSync(dir);
+    fs.writeFileSync(
+      path.join(dir, ".claude.json"),
+      JSON.stringify({ numStartups: 5, tipsHistory: [], theme: "light" }),
+    );
+
+    stripAuthFromClaudeJson(dir);
+
+    const result = JSON.parse(fs.readFileSync(path.join(dir, ".claude.json"), "utf-8"));
+    expect(result.numStartups).toBe(5);
+    expect(result.tipsHistory).toEqual([]);
+    expect(result.theme).toBe("light");
+  });
+
+  it("does nothing when .claude.json does not exist", () => {
+    const dir = path.join(tmpDir, "profile");
+    fs.mkdirSync(dir);
+
+    expect(() => stripAuthFromClaudeJson(dir)).not.toThrow();
+  });
+
+  it("does nothing when .claude.json has no auth fields", () => {
+    const dir = path.join(tmpDir, "profile");
+    fs.mkdirSync(dir);
+    const content = JSON.stringify({ numStartups: 3 });
+    fs.writeFileSync(path.join(dir, ".claude.json"), content);
+
+    stripAuthFromClaudeJson(dir);
+
+    expect(fs.readFileSync(path.join(dir, ".claude.json"), "utf-8")).toBe(content);
+  });
+
+  it("does nothing when .claude.json is invalid JSON", () => {
+    const dir = path.join(tmpDir, "profile");
+    fs.mkdirSync(dir);
+    fs.writeFileSync(path.join(dir, ".claude.json"), "not-json");
+
+    expect(() => stripAuthFromClaudeJson(dir)).not.toThrow();
+    expect(fs.readFileSync(path.join(dir, ".claude.json"), "utf-8")).toBe("not-json");
   });
 });
 
