@@ -2,7 +2,19 @@ import * as fs from "node:fs";
 import { loadConfig, saveConfig, getProfileDir } from "./config.js";
 import { copyBaseConfig, resetProfileDir } from "./migrate.js";
 
-const RESERVED_NAMES = ["help", "version", "add", "remove", "list", "default", "rule", "which"];
+const RESERVED_NAMES = [
+  "help",
+  "version",
+  "add",
+  "remove",
+  "list",
+  "default",
+  "rule",
+  "which",
+  "copy-config",
+  "reset",
+  "duplicate",
+];
 
 function validateProfileName(name: string): void {
   if (!/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(name)) {
