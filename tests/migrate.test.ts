@@ -71,6 +71,39 @@ describe("copyBaseConfig", () => {
     expect(fs.existsSync(path.join(target, "file.txt"))).toBe(true);
   });
 
+  it("strips auth fields from .claude.json by default", () => {
+    const source = path.join(tmpDir, "source");
+    const target = path.join(tmpDir, "target");
+    fs.mkdirSync(source);
+    fs.writeFileSync(
+      path.join(source, ".claude.json"),
+      JSON.stringify({ oauthAccount: { token: "secret" }, userID: "u123", theme: "dark" }),
+    );
+
+    copyBaseConfig(source, target);
+
+    const result = JSON.parse(fs.readFileSync(path.join(target, ".claude.json"), "utf-8"));
+    expect(result).not.toHaveProperty("oauthAccount");
+    expect(result).not.toHaveProperty("userID");
+    expect(result.theme).toBe("dark");
+  });
+
+  it("preserves auth fields when stripAuth is false", () => {
+    const source = path.join(tmpDir, "source");
+    const target = path.join(tmpDir, "target");
+    fs.mkdirSync(source);
+    fs.writeFileSync(
+      path.join(source, ".claude.json"),
+      JSON.stringify({ oauthAccount: { token: "secret" }, userID: "u123" }),
+    );
+
+    copyBaseConfig(source, target, { stripAuth: false });
+
+    const result = JSON.parse(fs.readFileSync(path.join(target, ".claude.json"), "utf-8"));
+    expect(result.oauthAccount).toEqual({ token: "secret" });
+    expect(result.userID).toBe("u123");
+  });
+
   it("copies nested directory structures correctly", () => {
     const source = path.join(tmpDir, "source");
     fs.mkdirSync(path.join(source, "a", "b", "c"), { recursive: true });
