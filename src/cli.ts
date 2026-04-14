@@ -18,7 +18,7 @@ import {
 } from "./migrate.js";
 import { confirm } from "./prompt.js";
 
-const VERSION = "1.1.0";
+const VERSION = "1.2.0";
 
 export function printUsage(): void {
   console.log(

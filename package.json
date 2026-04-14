@@ -1,6 +1,6 @@
 {
   "name": "@futura-research/claude-switch",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Switch between multiple Claude Code accounts with named profiles",
   "author": "Futura Research",
   "license": "Apache-2.0",
