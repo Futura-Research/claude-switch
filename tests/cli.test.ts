@@ -21,6 +21,7 @@ import {
   handleDuplicate,
   handleWhich,
   launchClaude,
+  promptCopyCategories,
 } from "../src/cli.js";
 
 // Mock launcher to avoid spawning real processes
@@ -403,6 +404,110 @@ describe("handleCopyConfig", () => {
     }
 
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Copied config from"));
+  });
+
+  it("only copies files for selected categories", async () => {
+    const { confirm } = await import("../src/prompt.js");
+    // settings=true, skills=false, ide=false, history=false, work=false
+    vi.mocked(confirm)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false);
+
+    addProfile("work", tmpDir);
+    const fakeClaudeDir = path.join(tmpDir, "fake-claude");
+    fs.mkdirSync(fakeClaudeDir);
+    fs.writeFileSync(path.join(fakeClaudeDir, "settings.json"), '{"theme":"dark"}');
+    fs.mkdirSync(path.join(fakeClaudeDir, "projects"), { recursive: true });
+    fs.writeFileSync(path.join(fakeClaudeDir, "projects", "chat.json"), "{}");
+
+    const origEnv = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = fakeClaudeDir;
+    try {
+      await handleCopyConfig(["work"], tmpDir);
+    } finally {
+      if (origEnv !== undefined) {
+        process.env.CLAUDE_CONFIG_DIR = origEnv;
+      } else {
+        delete process.env.CLAUDE_CONFIG_DIR;
+      }
+    }
+
+    const profileDir = path.join(tmpDir, "profiles", "work");
+    expect(fs.existsSync(path.join(profileDir, "settings.json"))).toBe(true);
+    expect(fs.existsSync(path.join(profileDir, "projects"))).toBe(false);
+  });
+
+  it("reports nothing when all categories declined", async () => {
+    const { confirm } = await import("../src/prompt.js");
+    vi.mocked(confirm)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false);
+
+    addProfile("work", tmpDir);
+    const fakeClaudeDir = path.join(tmpDir, "fake-claude");
+    fs.mkdirSync(fakeClaudeDir);
+    fs.writeFileSync(path.join(fakeClaudeDir, "settings.json"), "{}");
+
+    const origEnv = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = fakeClaudeDir;
+    try {
+      await handleCopyConfig(["work"], tmpDir);
+    } finally {
+      if (origEnv !== undefined) {
+        process.env.CLAUDE_CONFIG_DIR = origEnv;
+      } else {
+        delete process.env.CLAUDE_CONFIG_DIR;
+      }
+    }
+
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Nothing selected"));
+  });
+});
+
+describe("promptCopyCategories", () => {
+  it("returns selected categories based on confirm responses", async () => {
+    const { confirm } = await import("../src/prompt.js");
+    // settings=true, skills=false, ide=true, history=false, work=false
+    vi.mocked(confirm)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false);
+
+    const fakeDir = path.join(tmpDir, "src");
+    fs.mkdirSync(fakeDir);
+    const categories = await promptCopyCategories(fakeDir);
+
+    expect(categories).toEqual(["settings", "ide"]);
+  });
+
+  it("returns empty array when all declined", async () => {
+    const { confirm } = await import("../src/prompt.js");
+    vi.mocked(confirm).mockResolvedValue(false);
+
+    const fakeDir = path.join(tmpDir, "src");
+    fs.mkdirSync(fakeDir);
+    const categories = await promptCopyCategories(fakeDir);
+
+    expect(categories).toHaveLength(0);
+  });
+
+  it("returns all categories when all confirmed", async () => {
+    const { confirm } = await import("../src/prompt.js");
+    vi.mocked(confirm).mockResolvedValue(true);
+
+    const fakeDir = path.join(tmpDir, "src");
+    fs.mkdirSync(fakeDir);
+    const categories = await promptCopyCategories(fakeDir);
+
+    expect(categories).toEqual(["settings", "skills", "ide", "history", "work"]);
   });
 });
 
