@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import * as path from "node:path";
 
 export function copyBaseConfig(
   sourceDir: string,
@@ -17,4 +18,14 @@ export function copyBaseConfig(
   fs.cpSync(sourceDir, targetDir, { recursive: true, force: true });
 
   return { copied: true };
+}
+
+export function resetProfileDir(profileDir: string): void {
+  if (!fs.existsSync(profileDir)) {
+    return;
+  }
+
+  for (const entry of fs.readdirSync(profileDir)) {
+    fs.rmSync(path.join(profileDir, entry), { recursive: true, force: true });
+  }
 }
