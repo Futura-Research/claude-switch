@@ -1,4 +1,4 @@
-import { initConfig, loadConfig, getClaudeBaseDir } from "./config.js";
+import { initConfig, loadConfig, getClaudeBaseDir, getSharedDir } from "./config.js";
 import {
   addProfile,
   removeProfile,
@@ -10,7 +10,12 @@ import {
 import { addRule, removeRule, listRules } from "./rules.js";
 import { resolveProfile, parseArgs } from "./resolver.js";
 import { launch } from "./launcher.js";
-import { copyBaseConfig, COPY_CATEGORIES, type CopyCategory } from "./migrate.js";
+import {
+  copyBaseConfig,
+  ensureProjectsLink,
+  COPY_CATEGORIES,
+  type CopyCategory,
+} from "./migrate.js";
 import { confirm } from "./prompt.js";
 
 const VERSION = "1.1.0";
@@ -84,6 +89,7 @@ export async function handleAdd(args: string[], baseDirOverride?: string): Promi
       baseDirOverride,
       copyFrom && copyCategories?.length ? { copyFrom, categories: copyCategories } : undefined,
     );
+    ensureProjectsLink(profileDir, getSharedDir(baseDirOverride));
     console.log(`\n  Creating profile "${name}"...`);
     console.log(`  Config directory: ${profileDir}\n`);
     if (copyFrom && copyCategories?.length) {
@@ -266,6 +272,7 @@ export function launchClaude(args: string[], baseDirOverride?: string): void {
     const resolved = resolveProfile(args, process.cwd(), baseDirOverride);
     const config = loadConfig(baseDirOverride);
     const { claudeArgs } = parseArgs(args, config);
+    ensureProjectsLink(resolved.configDir, getSharedDir(baseDirOverride));
     launch({ configDir: resolved.configDir, args: claudeArgs });
   });
 }
