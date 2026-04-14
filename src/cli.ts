@@ -3,6 +3,7 @@ import { addProfile, removeProfile, listProfiles, setDefault } from "./profiles.
 import { addRule, removeRule, listRules } from "./rules.js";
 import { resolveProfile, parseArgs } from "./resolver.js";
 import { launch } from "./launcher.js";
+import { copyBaseConfig } from "./migrate.js";
 
 const VERSION = "1.0.0";
 
@@ -147,6 +148,25 @@ export function handleRule(args: string[], baseDirOverride?: string): void {
   }
 }
 
+export function handleCopyConfig(args: string[], baseDirOverride?: string): void {
+  const name = requireName(args, "Usage: claude-switch copy-config <profile>");
+  runWithErrorHandling(() => {
+    const config = loadConfig(baseDirOverride);
+    if (!config.profiles[name]) {
+      throw new Error(
+        `Profile "${name}" does not exist. Add it first with: claude-switch add ${name}`,
+      );
+    }
+    const sourceDir = getClaudeBaseDir();
+    const result = copyBaseConfig(sourceDir, config.profiles[name].config_dir);
+    if (result.copied) {
+      console.log(`Copied config from "${sourceDir}" to profile "${name}".`);
+    } else {
+      console.log(`Nothing to copy: ${result.reason}.`);
+    }
+  });
+}
+
 export function handleWhich(baseDirOverride?: string): void {
   runWithErrorHandling(() => {
     const resolved = resolveProfile([], process.cwd(), baseDirOverride);
@@ -181,6 +201,7 @@ export function run(argv: string[], baseDirOverride?: string): void {
     list: () => handleList(baseDirOverride),
     default: (args) => handleDefault(args, baseDirOverride),
     rule: (args) => handleRule(args, baseDirOverride),
+    "copy-config": (args) => handleCopyConfig(args, baseDirOverride),
     which: () => handleWhich(baseDirOverride),
     "--help": () => printUsage(),
     "-h": () => printUsage(),
