@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import { loadConfig, saveConfig, getProfileDir } from "./config.js";
-import { copyBaseConfig } from "./migrate.js";
+import { copyBaseConfig, resetProfileDir } from "./migrate.js";
 
 const RESERVED_NAMES = ["help", "version", "add", "remove", "list", "default", "rule", "which"];
 
@@ -121,4 +121,14 @@ export function duplicateProfile(
   saveConfig(config, baseDirOverride);
 
   return targetDir;
+}
+
+export function resetProfile(name: string, baseDirOverride?: string): void {
+  const config = loadConfig(baseDirOverride);
+
+  if (!config.profiles[name]) {
+    throw new Error(`Profile "${name}" does not exist.`);
+  }
+
+  resetProfileDir(config.profiles[name].config_dir);
 }
