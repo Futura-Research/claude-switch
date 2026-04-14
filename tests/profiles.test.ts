@@ -9,6 +9,8 @@ import {
   listProfiles,
   setDefault,
   getDefault,
+  duplicateProfile,
+  resetProfile,
 } from "../src/profiles.js";
 
 let tmpDir: string;
@@ -151,5 +153,105 @@ describe("setDefault", () => {
 describe("getDefault", () => {
   it("returns undefined when no profiles exist", () => {
     expect(getDefault(tmpDir)).toBeUndefined();
+  });
+});
+
+describe("addProfile with copyFrom", () => {
+  it("copies source contents when copyFrom is provided", () => {
+    const sourceDir = path.join(tmpDir, "claude-source");
+    fs.mkdirSync(sourceDir);
+    fs.writeFileSync(path.join(sourceDir, "settings.json"), '{"theme":"dark"}');
+
+    const profileDir = addProfile("work", tmpDir, { copyFrom: sourceDir });
+
+    expect(fs.readFileSync(path.join(profileDir, "settings.json"), "utf-8")).toBe(
+      '{"theme":"dark"}',
+    );
+  });
+
+  it("creates profile normally when copyFrom is not provided", () => {
+    const profileDir = addProfile("work", tmpDir);
+
+    expect(fs.existsSync(profileDir)).toBe(true);
+    expect(fs.readdirSync(profileDir)).toHaveLength(0);
+  });
+
+  it("creates profile normally when copyFrom path does not exist", () => {
+    const profileDir = addProfile("work", tmpDir, { copyFrom: "/nonexistent/path" });
+
+    expect(fs.existsSync(profileDir)).toBe(true);
+    expect(fs.readdirSync(profileDir)).toHaveLength(0);
+  });
+});
+
+describe("duplicateProfile", () => {
+  it("creates new profile with source files", () => {
+    const profileDir = addProfile("work", tmpDir);
+    fs.writeFileSync(path.join(profileDir, "settings.json"), '{"key":"val"}');
+
+    const targetDir = duplicateProfile("work", "work-copy", tmpDir);
+
+    expect(fs.readFileSync(path.join(targetDir, "settings.json"), "utf-8")).toBe('{"key":"val"}');
+  });
+
+  it("registers new profile in config", () => {
+    addProfile("work", tmpDir);
+    duplicateProfile("work", "work-copy", tmpDir);
+
+    const profiles = listProfiles(tmpDir);
+    expect(profiles.find((p) => p.name === "work-copy")).toBeDefined();
+  });
+
+  it("does not change default profile", () => {
+    addProfile("work", tmpDir);
+    duplicateProfile("work", "work-copy", tmpDir);
+
+    expect(getDefault(tmpDir)).toBe("work");
+  });
+
+  it("throws when source does not exist", () => {
+    expect(() => duplicateProfile("nonexistent", "copy", tmpDir)).toThrow(
+      'Source profile "nonexistent" does not exist.',
+    );
+  });
+
+  it("throws when target already exists", () => {
+    addProfile("work", tmpDir);
+    addProfile("personal", tmpDir);
+
+    expect(() => duplicateProfile("work", "personal", tmpDir)).toThrow(
+      'Profile "personal" already exists.',
+    );
+  });
+
+  it("throws on invalid target name", () => {
+    addProfile("work", tmpDir);
+    expect(() => duplicateProfile("work", "123bad", tmpDir)).toThrow("Invalid profile name");
+  });
+});
+
+describe("resetProfile", () => {
+  it("clears all files in profile dir", () => {
+    const profileDir = addProfile("work", tmpDir);
+    fs.writeFileSync(path.join(profileDir, "settings.json"), "{}");
+    fs.mkdirSync(path.join(profileDir, "projects"));
+
+    resetProfile("work", tmpDir);
+
+    expect(fs.readdirSync(profileDir)).toHaveLength(0);
+  });
+
+  it("keeps profile registered in config", () => {
+    addProfile("work", tmpDir);
+    resetProfile("work", tmpDir);
+
+    const profiles = listProfiles(tmpDir);
+    expect(profiles.find((p) => p.name === "work")).toBeDefined();
+  });
+
+  it("throws when profile does not exist", () => {
+    expect(() => resetProfile("nonexistent", tmpDir)).toThrow(
+      'Profile "nonexistent" does not exist.',
+    );
   });
 });
