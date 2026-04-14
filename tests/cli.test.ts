@@ -106,6 +106,47 @@ describe("handleAdd", () => {
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("already exists"));
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
+
+  it("copies base config by default when source exists", async () => {
+    const { launch } = await import("../src/launcher.js");
+    const fakeClaudeDir = path.join(tmpDir, "fake-claude");
+    fs.mkdirSync(fakeClaudeDir);
+    fs.writeFileSync(path.join(fakeClaudeDir, "settings.json"), '{"theme":"dark"}');
+
+    const origEnv = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = fakeClaudeDir;
+    try {
+      handleAdd(["work"], tmpDir);
+    } finally {
+      if (origEnv !== undefined) {
+        process.env.CLAUDE_CONFIG_DIR = origEnv;
+      } else {
+        delete process.env.CLAUDE_CONFIG_DIR;
+      }
+    }
+
+    expect(launch).toHaveBeenCalled();
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Copied settings from"));
+    const profileDir = path.join(tmpDir, "profiles", "work");
+    expect(fs.readFileSync(path.join(profileDir, "settings.json"), "utf-8")).toBe(
+      '{"theme":"dark"}',
+    );
+  });
+
+  it("skips copy when --no-copy is passed", async () => {
+    const { launch } = await import("../src/launcher.js");
+    handleAdd(["work", "--no-copy"], tmpDir);
+    expect(launch).toHaveBeenCalled();
+    const profileDir = path.join(tmpDir, "profiles", "work");
+    expect(fs.readdirSync(profileDir)).toHaveLength(0);
+  });
+
+  it("handles --no-copy before name", async () => {
+    const { launch } = await import("../src/launcher.js");
+    handleAdd(["--no-copy", "work"], tmpDir);
+    expect(launch).toHaveBeenCalled();
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Creating profile "work"'));
+  });
 });
 
 describe("handleRemove", () => {
