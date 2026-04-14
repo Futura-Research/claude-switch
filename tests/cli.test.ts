@@ -217,10 +217,24 @@ describe("handleAdd", () => {
 });
 
 describe("handleRemove", () => {
-  it("removes existing profile", () => {
-    addProfile("work", tmpDir);
+  it("removes existing profile and deletes its directory", () => {
+    const profileDir = addProfile("work", tmpDir);
     handleRemove(["work"], tmpDir);
     expect(logSpy).toHaveBeenCalledWith('Profile "work" removed.');
+    expect(fs.existsSync(profileDir)).toBe(false);
+  });
+
+  it("keeps directory when --keep-dir is passed", () => {
+    const profileDir = addProfile("work", tmpDir);
+    handleRemove(["work", "--keep-dir"], tmpDir);
+    expect(logSpy).toHaveBeenCalledWith('Profile "work" removed.');
+    expect(fs.existsSync(profileDir)).toBe(true);
+  });
+
+  it("accepts --keep-dir before name", () => {
+    const profileDir = addProfile("work", tmpDir);
+    handleRemove(["--keep-dir", "work"], tmpDir);
+    expect(fs.existsSync(profileDir)).toBe(true);
   });
 
   it("exits when name is missing", () => {
