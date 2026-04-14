@@ -330,7 +330,7 @@ describe("handleRule", () => {
 });
 
 describe("handleCopyConfig", () => {
-  it("copies base config to existing profile", () => {
+  it("copies base config to existing profile", async () => {
     addProfile("work", tmpDir);
     const fakeClaudeDir = path.join(tmpDir, "fake-claude");
     fs.mkdirSync(fakeClaudeDir);
@@ -339,7 +339,7 @@ describe("handleCopyConfig", () => {
     const origEnv = process.env.CLAUDE_CONFIG_DIR;
     process.env.CLAUDE_CONFIG_DIR = fakeClaudeDir;
     try {
-      handleCopyConfig(["work"], tmpDir);
+      await handleCopyConfig(["work"], tmpDir);
     } finally {
       if (origEnv !== undefined) {
         process.env.CLAUDE_CONFIG_DIR = origEnv;
@@ -353,18 +353,18 @@ describe("handleCopyConfig", () => {
     expect(fs.readFileSync(path.join(profileDir, "settings.json"), "utf-8")).toBe('{"key":"val"}');
   });
 
-  it("exits with error when profile does not exist", () => {
-    handleCopyConfig(["nonexistent"], tmpDir);
+  it("exits with error when profile does not exist", async () => {
+    await handleCopyConfig(["nonexistent"], tmpDir);
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("does not exist"));
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
-  it("exits with error when name is missing", () => {
-    handleCopyConfig([], tmpDir);
+  it("exits with error when name is missing", async () => {
+    await handleCopyConfig([], tmpDir);
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
-  it("reports nothing to copy when source is empty", () => {
+  it("reports nothing to copy when source is empty", async () => {
     addProfile("work", tmpDir);
     const emptyDir = path.join(tmpDir, "empty-claude");
     fs.mkdirSync(emptyDir);
@@ -372,7 +372,7 @@ describe("handleCopyConfig", () => {
     const origEnv = process.env.CLAUDE_CONFIG_DIR;
     process.env.CLAUDE_CONFIG_DIR = emptyDir;
     try {
-      handleCopyConfig(["work"], tmpDir);
+      await handleCopyConfig(["work"], tmpDir);
     } finally {
       if (origEnv !== undefined) {
         process.env.CLAUDE_CONFIG_DIR = origEnv;
@@ -384,16 +384,16 @@ describe("handleCopyConfig", () => {
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Nothing to copy"));
   });
 
-  it("dispatches correctly via run", () => {
+  it("dispatches correctly via run", async () => {
     addProfile("work", tmpDir);
     const fakeClaudeDir = path.join(tmpDir, "fake-claude");
     fs.mkdirSync(fakeClaudeDir);
-    fs.writeFileSync(path.join(fakeClaudeDir, "file.txt"), "data");
+    fs.writeFileSync(path.join(fakeClaudeDir, "settings.json"), "{}");
 
     const origEnv = process.env.CLAUDE_CONFIG_DIR;
     process.env.CLAUDE_CONFIG_DIR = fakeClaudeDir;
     try {
-      run(["copy-config", "work"], tmpDir);
+      await run(["copy-config", "work"], tmpDir);
     } finally {
       if (origEnv !== undefined) {
         process.env.CLAUDE_CONFIG_DIR = origEnv;

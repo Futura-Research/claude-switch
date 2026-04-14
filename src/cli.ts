@@ -10,7 +10,7 @@ import {
 import { addRule, removeRule, listRules } from "./rules.js";
 import { resolveProfile, parseArgs } from "./resolver.js";
 import { launch } from "./launcher.js";
-import { copyBaseConfig } from "./migrate.js";
+import { copyBaseConfig, COPY_CATEGORIES, type CopyCategory } from "./migrate.js";
 import { confirm } from "./prompt.js";
 
 const VERSION = "1.1.0";
@@ -65,6 +65,7 @@ export async function handleAdd(args: string[], baseDirOverride?: string): Promi
   initConfig(baseDirOverride);
 
   let copyFrom: string | undefined;
+  let copyCategories: CopyCategory[] | undefined;
   if (!noCopy) {
     const baseDir = getClaudeBaseDir();
     const fs = await import("node:fs");
@@ -72,15 +73,20 @@ export async function handleAdd(args: string[], baseDirOverride?: string): Promi
       const shouldCopy = await confirm("  Copy existing Claude settings to new profile? (Y/n) ");
       if (shouldCopy) {
         copyFrom = baseDir;
+        copyCategories = await promptCopyCategories(baseDir);
       }
     }
   }
 
   runWithErrorHandling(() => {
-    const profileDir = addProfile(name, baseDirOverride, copyFrom ? { copyFrom } : undefined);
+    const profileDir = addProfile(
+      name,
+      baseDirOverride,
+      copyFrom && copyCategories?.length ? { copyFrom, categories: copyCategories } : undefined,
+    );
     console.log(`\n  Creating profile "${name}"...`);
     console.log(`  Config directory: ${profileDir}\n`);
-    if (copyFrom) {
+    if (copyFrom && copyCategories?.length) {
       console.log(`  Copied settings from ${copyFrom}`);
     }
     console.log("  Launching Claude Code to authenticate...");
@@ -170,23 +176,59 @@ export function handleRule(args: string[], baseDirOverride?: string): void {
   }
 }
 
-export function handleCopyConfig(args: string[], baseDirOverride?: string): void {
+export async function handleCopyConfig(args: string[], baseDirOverride?: string): Promise<void> {
   const name = requireName(args, "Usage: claude-switch copy-config <profile>");
-  runWithErrorHandling(() => {
+
+  let profileDir: string;
+  try {
     const config = loadConfig(baseDirOverride);
     if (!config.profiles[name]) {
       throw new Error(
         `Profile "${name}" does not exist. Add it first with: claude-switch add ${name}`,
       );
     }
-    const sourceDir = getClaudeBaseDir();
-    const result = copyBaseConfig(sourceDir, config.profiles[name].config_dir);
-    if (result.copied) {
-      console.log(`Copied config from "${sourceDir}" to profile "${name}".`);
-    } else {
-      console.log(`Nothing to copy: ${result.reason}.`);
-    }
-  });
+    profileDir = config.profiles[name].config_dir;
+  } catch (err) {
+    console.error((err as Error).message);
+    process.exit(1);
+    return;
+  }
+
+  const fs = await import("node:fs");
+  const sourceDir = getClaudeBaseDir();
+  if (!fs.existsSync(sourceDir) || fs.readdirSync(sourceDir).length === 0) {
+    console.log(`Nothing to copy: source is empty or does not exist.`);
+    return;
+  }
+
+  const categories = await promptCopyCategories(sourceDir);
+  if (categories.length === 0) {
+    console.log("Nothing selected to copy.");
+    return;
+  }
+
+  const result = copyBaseConfig(sourceDir, profileDir, categories);
+  if (result.copied) {
+    console.log(`Copied config from "${sourceDir}" to profile "${name}".`);
+  } else {
+    console.log(`Nothing to copy: ${result.reason}.`);
+  }
+}
+
+export async function promptCopyCategories(sourceDir: string): Promise<CopyCategory[]> {
+  void sourceDir; // reserved for future size hints
+  console.log("\n  What would you like to copy?\n");
+  const selected: CopyCategory[] = [];
+  for (const [key, cat] of Object.entries(COPY_CATEGORIES) as [
+    CopyCategory,
+    (typeof COPY_CATEGORIES)[CopyCategory],
+  ][]) {
+    const hint = cat.defaultOn ? "Y/n" : "y/N";
+    const yes = await confirm(`  ${cat.label} — ${cat.description} (${hint}) `, cat.defaultOn);
+    if (yes) selected.push(key);
+  }
+  console.log();
+  return selected;
 }
 
 export function handleDuplicate(args: string[], baseDirOverride?: string): void {

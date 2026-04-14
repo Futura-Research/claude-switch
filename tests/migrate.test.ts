@@ -15,36 +15,72 @@ afterEach(() => {
 });
 
 describe("copyBaseConfig", () => {
-  it("copies files and subdirectories recursively", () => {
+  it("copies files for selected categories", () => {
     const source = path.join(tmpDir, "source");
     const target = path.join(tmpDir, "target");
-    fs.mkdirSync(source, { recursive: true });
+    fs.mkdirSync(source);
     fs.writeFileSync(path.join(source, "settings.json"), '{"theme":"dark"}');
-    fs.mkdirSync(path.join(source, "projects"), { recursive: true });
-    fs.writeFileSync(path.join(source, "projects", "memo.md"), "notes");
 
-    const result = copyBaseConfig(source, target);
+    const result = copyBaseConfig(source, target, ["settings"]);
 
     expect(result).toEqual({ copied: true });
     expect(fs.readFileSync(path.join(target, "settings.json"), "utf-8")).toBe('{"theme":"dark"}');
+  });
+
+  it("copies directories for selected categories", () => {
+    const source = path.join(tmpDir, "source");
+    const target = path.join(tmpDir, "target");
+    fs.mkdirSync(path.join(source, "projects"), { recursive: true });
+    fs.writeFileSync(path.join(source, "projects", "memo.md"), "notes");
+
+    copyBaseConfig(source, target, ["history"]);
+
     expect(fs.readFileSync(path.join(target, "projects", "memo.md"), "utf-8")).toBe("notes");
   });
 
+  it("only copies paths for the selected categories", () => {
+    const source = path.join(tmpDir, "source");
+    const target = path.join(tmpDir, "target");
+    fs.mkdirSync(source);
+    fs.writeFileSync(path.join(source, "settings.json"), "{}");
+    fs.mkdirSync(path.join(source, "projects"), { recursive: true });
+    fs.writeFileSync(path.join(source, "projects", "chat.json"), "{}");
+
+    copyBaseConfig(source, target, ["settings"]);
+
+    expect(fs.existsSync(path.join(target, "settings.json"))).toBe(true);
+    expect(fs.existsSync(path.join(target, "projects"))).toBe(false);
+  });
+
   it("returns copied false when source does not exist", () => {
-    const result = copyBaseConfig(path.join(tmpDir, "nonexistent"), path.join(tmpDir, "target"));
+    const result = copyBaseConfig(path.join(tmpDir, "nonexistent"), path.join(tmpDir, "target"), [
+      "settings",
+    ]);
 
     expect(result.copied).toBe(false);
     expect(result.reason).toContain("does not exist");
   });
 
-  it("returns copied false when source is empty", () => {
-    const source = path.join(tmpDir, "empty-source");
+  it("returns copied false when no categories selected", () => {
+    const source = path.join(tmpDir, "source");
     fs.mkdirSync(source);
+    fs.writeFileSync(path.join(source, "settings.json"), "{}");
 
-    const result = copyBaseConfig(source, path.join(tmpDir, "target"));
+    const result = copyBaseConfig(source, path.join(tmpDir, "target"), []);
 
     expect(result.copied).toBe(false);
-    expect(result.reason).toContain("empty");
+    expect(result.reason).toContain("no categories selected");
+  });
+
+  it("returns copied false when no category files exist in source", () => {
+    const source = path.join(tmpDir, "source");
+    fs.mkdirSync(source);
+    fs.writeFileSync(path.join(source, "settings.json"), "{}");
+
+    const result = copyBaseConfig(source, path.join(tmpDir, "target"), ["history"]);
+
+    expect(result.copied).toBe(false);
+    expect(result.reason).toContain("no matching files");
   });
 
   it("overwrites existing files in target", () => {
@@ -55,7 +91,7 @@ describe("copyBaseConfig", () => {
     fs.writeFileSync(path.join(target, "settings.json"), "old");
     fs.writeFileSync(path.join(source, "settings.json"), "new");
 
-    copyBaseConfig(source, target);
+    copyBaseConfig(source, target, ["settings"]);
 
     expect(fs.readFileSync(path.join(target, "settings.json"), "utf-8")).toBe("new");
   });
@@ -64,14 +100,26 @@ describe("copyBaseConfig", () => {
     const source = path.join(tmpDir, "source");
     const target = path.join(tmpDir, "nested", "deep", "target");
     fs.mkdirSync(source);
-    fs.writeFileSync(path.join(source, "file.txt"), "data");
+    fs.writeFileSync(path.join(source, "settings.json"), "{}");
 
-    copyBaseConfig(source, target);
+    copyBaseConfig(source, target, ["settings"]);
 
-    expect(fs.existsSync(path.join(target, "file.txt"))).toBe(true);
+    expect(fs.existsSync(path.join(target, "settings.json"))).toBe(true);
   });
 
-  it("strips auth fields from .claude.json by default", () => {
+  it("skips category paths that do not exist in source", () => {
+    const source = path.join(tmpDir, "source");
+    const target = path.join(tmpDir, "target");
+    fs.mkdirSync(source);
+    fs.writeFileSync(path.join(source, "settings.json"), "{}");
+
+    copyBaseConfig(source, target, ["settings", "history"]);
+
+    expect(fs.existsSync(path.join(target, "settings.json"))).toBe(true);
+    expect(fs.existsSync(path.join(target, "projects"))).toBe(false);
+  });
+
+  it("strips auth fields from .claude.json by default when settings selected", () => {
     const source = path.join(tmpDir, "source");
     const target = path.join(tmpDir, "target");
     fs.mkdirSync(source);
@@ -80,7 +128,7 @@ describe("copyBaseConfig", () => {
       JSON.stringify({ oauthAccount: { token: "secret" }, userID: "u123", theme: "dark" }),
     );
 
-    copyBaseConfig(source, target);
+    copyBaseConfig(source, target, ["settings"]);
 
     const result = JSON.parse(fs.readFileSync(path.join(target, ".claude.json"), "utf-8"));
     expect(result).not.toHaveProperty("oauthAccount");
@@ -97,24 +145,11 @@ describe("copyBaseConfig", () => {
       JSON.stringify({ oauthAccount: { token: "secret" }, userID: "u123" }),
     );
 
-    copyBaseConfig(source, target, { stripAuth: false });
+    copyBaseConfig(source, target, ["settings"], { stripAuth: false });
 
     const result = JSON.parse(fs.readFileSync(path.join(target, ".claude.json"), "utf-8"));
     expect(result.oauthAccount).toEqual({ token: "secret" });
     expect(result.userID).toBe("u123");
-  });
-
-  it("copies nested directory structures correctly", () => {
-    const source = path.join(tmpDir, "source");
-    fs.mkdirSync(path.join(source, "a", "b", "c"), { recursive: true });
-    fs.writeFileSync(path.join(source, "a", "b", "c", "deep.txt"), "deep");
-    fs.writeFileSync(path.join(source, "a", "top.txt"), "top");
-
-    const target = path.join(tmpDir, "target");
-    copyBaseConfig(source, target);
-
-    expect(fs.readFileSync(path.join(target, "a", "b", "c", "deep.txt"), "utf-8")).toBe("deep");
-    expect(fs.readFileSync(path.join(target, "a", "top.txt"), "utf-8")).toBe("top");
   });
 });
 

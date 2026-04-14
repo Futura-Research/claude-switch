@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import { loadConfig, saveConfig, getProfileDir } from "./config.js";
-import { copyBaseConfig, resetProfileDir } from "./migrate.js";
+import { copyBaseConfig, resetProfileDir, type CopyCategory } from "./migrate.js";
 
 const RESERVED_NAMES = [
   "help",
@@ -29,10 +29,12 @@ function validateProfileName(name: string): void {
   }
 }
 
+const DEFAULT_COPY_CATEGORIES: CopyCategory[] = ["settings", "skills", "ide"];
+
 export function addProfile(
   name: string,
   baseDirOverride?: string,
-  options?: { copyFrom?: string },
+  options?: { copyFrom?: string; categories?: CopyCategory[] },
 ): string {
   validateProfileName(name);
 
@@ -46,7 +48,7 @@ export function addProfile(
   fs.mkdirSync(profileDir, { recursive: true });
 
   if (options?.copyFrom) {
-    copyBaseConfig(options.copyFrom, profileDir);
+    copyBaseConfig(options.copyFrom, profileDir, options.categories ?? DEFAULT_COPY_CATEGORIES);
   }
 
   config.profiles[name] = { config_dir: profileDir };
@@ -127,7 +129,9 @@ export function duplicateProfile(
   const sourceDir = config.profiles[sourceName].config_dir;
   const targetDir = getProfileDir(targetName, baseDirOverride);
   fs.mkdirSync(targetDir, { recursive: true });
-  copyBaseConfig(sourceDir, targetDir, { stripAuth: false });
+  if (fs.existsSync(sourceDir)) {
+    fs.cpSync(sourceDir, targetDir, { recursive: true, force: true });
+  }
 
   config.profiles[targetName] = { config_dir: targetDir };
   saveConfig(config, baseDirOverride);

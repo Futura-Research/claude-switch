@@ -67,21 +67,38 @@ export function stripAuthFromClaudeJson(dir: string): void {
 export function copyBaseConfig(
   sourceDir: string,
   targetDir: string,
+  categories: CopyCategory[],
   options?: { stripAuth?: boolean },
 ): { copied: boolean; reason?: string } {
   if (!fs.existsSync(sourceDir)) {
     return { copied: false, reason: "source directory does not exist" };
   }
-
-  const entries = fs.readdirSync(sourceDir);
-  if (entries.length === 0) {
-    return { copied: false, reason: "source directory is empty" };
+  if (categories.length === 0) {
+    return { copied: false, reason: "no categories selected" };
   }
 
   fs.mkdirSync(targetDir, { recursive: true });
-  fs.cpSync(sourceDir, targetDir, { recursive: true, force: true });
 
-  if (options?.stripAuth !== false) {
+  let anyCopied = false;
+  for (const category of categories) {
+    for (const relPath of COPY_CATEGORIES[category].paths) {
+      const srcPath = path.join(sourceDir, relPath);
+      const dstPath = path.join(targetDir, relPath);
+      if (!fs.existsSync(srcPath)) continue;
+      if (fs.statSync(srcPath).isDirectory()) {
+        fs.cpSync(srcPath, dstPath, { recursive: true, force: true });
+      } else {
+        fs.copyFileSync(srcPath, dstPath);
+      }
+      anyCopied = true;
+    }
+  }
+
+  if (!anyCopied) {
+    return { copied: false, reason: "no matching files found in source" };
+  }
+
+  if (options?.stripAuth !== false && categories.includes("settings")) {
     stripAuthFromClaudeJson(targetDir);
   }
 
