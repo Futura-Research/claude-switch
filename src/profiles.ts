@@ -61,12 +61,18 @@ export function addProfile(
   return profileDir;
 }
 
-export function removeProfile(name: string, baseDirOverride?: string): void {
+export function removeProfile(
+  name: string,
+  baseDirOverride?: string,
+  options?: { keepDir?: boolean },
+): void {
   const config = loadConfig(baseDirOverride);
 
   if (!config.profiles[name]) {
     throw new Error(`Profile "${name}" does not exist.`);
   }
+
+  const profileDir = config.profiles[name].config_dir;
 
   delete config.profiles[name];
   config.rules = config.rules.filter((r) => r.profile !== name);
@@ -77,6 +83,10 @@ export function removeProfile(name: string, baseDirOverride?: string): void {
   }
 
   saveConfig(config, baseDirOverride);
+
+  if (!options?.keepDir && fs.existsSync(profileDir)) {
+    fs.rmSync(profileDir, { recursive: true, force: true });
+  }
 }
 
 export function listProfiles(
