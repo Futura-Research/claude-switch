@@ -29,7 +29,7 @@ Usage:
   claude-switch --<profile> [claude flags...]    Launch claude with a profile
   claude-switch [claude flags...]                Auto-detect profile from cwd
   claude-switch add <name> [--no-copy]           Add a new profile (copies settings by default)
-  claude-switch remove <name>                    Remove a profile
+  claude-switch remove <name> [--keep-dir]        Remove a profile (deletes config dir by default)
   claude-switch list                             List all profiles
   claude-switch default <name>                   Set the default profile
   claude-switch copy-config <name>               Copy base Claude config to a profile
@@ -103,9 +103,11 @@ export async function handleAdd(args: string[], baseDirOverride?: string): Promi
 }
 
 export function handleRemove(args: string[], baseDirOverride?: string): void {
-  const name = requireName(args, "Usage: claude-switch remove <name>");
+  const keepDir = args.includes("--keep-dir");
+  const filtered = args.filter((a) => a !== "--keep-dir");
+  const name = requireName(filtered, "Usage: claude-switch remove <name> [--keep-dir]");
   runWithErrorHandling(() => {
-    removeProfile(name, baseDirOverride);
+    removeProfile(name, baseDirOverride, { keepDir });
     console.log(`Profile "${name}" removed.`);
   });
 }
