@@ -1,6 +1,44 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+export type CopyCategory = "settings" | "skills" | "ide" | "history" | "work";
+
+export const COPY_CATEGORIES: Record<
+  CopyCategory,
+  { label: string; description: string; paths: string[]; defaultOn: boolean }
+> = {
+  settings: {
+    label: "Settings",
+    description: "Theme, model, and general preferences",
+    paths: ["settings.json", "settings.local.json", ".claude.json"],
+    defaultOn: true,
+  },
+  skills: {
+    label: "Skills & commands",
+    description: "Custom skills, slash commands, and plugins",
+    paths: ["skills", "commands", "plugins"],
+    defaultOn: true,
+  },
+  ide: {
+    label: "IDE settings",
+    description: "VS Code / JetBrains integration config",
+    paths: ["ide"],
+    defaultOn: true,
+  },
+  history: {
+    label: "Conversation history",
+    description: "Chat transcripts per project — can be very large",
+    paths: ["projects", "sessions", "history.jsonl"],
+    defaultOn: false,
+  },
+  work: {
+    label: "In-progress work",
+    description: "Plans, tasks, and todos",
+    paths: ["plans", "tasks", "todos"],
+    defaultOn: false,
+  },
+};
+
 export const AUTH_FIELDS = ["oauthAccount", "userID"] as const;
 
 export function stripAuthFromClaudeJson(dir: string): void {
