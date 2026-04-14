@@ -119,6 +119,19 @@ export function copyBaseConfig(
   return { copied: true };
 }
 
+export function ensureProjectsLink(profileDir: string, sharedDir: string): void {
+  const projectsPath = path.join(profileDir, "projects");
+  try {
+    fs.lstatSync(projectsPath);
+    return; // already exists (real dir or any symlink) — leave it alone
+  } catch {
+    // does not exist — create symlink
+  }
+  const sharedProjects = path.join(sharedDir, "projects");
+  fs.mkdirSync(sharedProjects, { recursive: true });
+  fs.symlinkSync(sharedProjects, projectsPath);
+}
+
 export function resetProfileDir(profileDir: string): void {
   if (!fs.existsSync(profileDir)) {
     return;
