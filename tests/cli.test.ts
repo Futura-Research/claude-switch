@@ -18,6 +18,7 @@ import {
   handleRule,
   handleCopyConfig,
   handleReset,
+  handleDuplicate,
   handleWhich,
   launchClaude,
 } from "../src/cli.js";
@@ -350,6 +351,50 @@ describe("handleReset", () => {
     addProfile("work", tmpDir);
     run(["reset", "work"], tmpDir);
     expect(logSpy).toHaveBeenCalledWith('Profile "work" has been reset.');
+  });
+});
+
+describe("handleDuplicate", () => {
+  it("duplicates existing profile", () => {
+    const sourceDir = addProfile("work", tmpDir);
+    fs.writeFileSync(path.join(sourceDir, "settings.json"), '{"key":"val"}');
+
+    handleDuplicate(["work", "work-copy"], tmpDir);
+
+    expect(logSpy).toHaveBeenCalledWith('Profile "work-copy" created as a copy of "work".');
+    const targetDir = path.join(tmpDir, "profiles", "work-copy");
+    expect(fs.readFileSync(path.join(targetDir, "settings.json"), "utf-8")).toBe('{"key":"val"}');
+  });
+
+  it("exits with error when source does not exist", () => {
+    handleDuplicate(["nonexistent", "copy"], tmpDir);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("does not exist"));
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it("exits with error when target already exists", () => {
+    addProfile("work", tmpDir);
+    addProfile("personal", tmpDir);
+    handleDuplicate(["work", "personal"], tmpDir);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("already exists"));
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it("exits with error when args are missing", () => {
+    handleDuplicate([], tmpDir);
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it("exits with error when target name is missing", () => {
+    addProfile("work", tmpDir);
+    handleDuplicate(["work"], tmpDir);
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it("dispatches correctly via run", () => {
+    addProfile("work", tmpDir);
+    run(["duplicate", "work", "work-copy"], tmpDir);
+    expect(logSpy).toHaveBeenCalledWith('Profile "work-copy" created as a copy of "work".');
   });
 });
 
