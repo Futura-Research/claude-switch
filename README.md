@@ -61,10 +61,42 @@ claude-switch --dangerously-skip-permissions  # same, with flags
 ### Profile management
 
 ```bash
-claude-switch add <name>        # Create profile + authenticate
-claude-switch remove <name>     # Remove a profile
-claude-switch list              # List all profiles
-claude-switch default <name>    # Set the default profile
+claude-switch add <name>             # Create profile + authenticate
+claude-switch add <name> --no-copy   # Create profile without copying existing settings
+claude-switch remove <name>          # Remove a profile
+claude-switch list                   # List all profiles
+claude-switch default <name>         # Set the default profile
+```
+
+When you create a profile, `claude-switch` automatically copies your existing Claude config (`~/.claude`) into the new profile directory. This preserves your settings, project memories, custom commands, and conversation history. Use `--no-copy` if you want a clean slate instead.
+
+### Copy, reset & duplicate
+
+Manage profile config state at any time:
+
+```bash
+claude-switch copy-config <name>             # Copy base Claude config into a profile
+claude-switch reset <name>                   # Wipe a profile's config (keeps profile registered)
+claude-switch duplicate <source> <new-name>  # Clone a profile under a new name
+```
+
+**Copy config** is useful when you want to refresh a profile with your latest base settings:
+
+```bash
+claude-switch copy-config work    # overwrite work profile with current ~/.claude
+```
+
+**Reset** wipes the profile directory clean but keeps it registered — you can then re-authenticate or copy config back in:
+
+```bash
+claude-switch reset work          # clean slate
+claude-switch copy-config work    # restore from base config
+```
+
+**Duplicate** creates a new profile that's an exact clone of an existing one:
+
+```bash
+claude-switch duplicate work work-staging
 ```
 
 ### Directory rules
