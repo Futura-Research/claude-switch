@@ -9,8 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Auto-copy settings on profile add**: `claude-switch add <name>` now automatically copies the existing Claude config directory (`~/.claude`) into the new profile, preserving settings, project memories, and conversation history.
-- **`--no-copy` flag**: Use `claude-switch add <name> --no-copy` to create a clean profile without copying existing settings.
+- **Interactive copy on profile add**: `claude-switch add <name>` prompts whether to copy the existing Claude config directory (`~/.claude`) into the new profile, preserving settings, project memories, and conversation history.
+- **`--no-copy` flag**: Use `claude-switch add <name> --no-copy` to skip the prompt and create a clean profile.
 - **`copy-config` command**: `claude-switch copy-config <profile>` copies the base Claude config into any existing profile on demand.
 - **`reset` command**: `claude-switch reset <profile>` wipes a profile's config directory clean while keeping the profile registered.
 - **`duplicate` command**: `claude-switch duplicate <source> <new-name>` creates a new profile as a full copy of an existing one.

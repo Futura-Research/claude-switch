@@ -68,7 +68,14 @@ claude-switch list                   # List all profiles
 claude-switch default <name>         # Set the default profile
 ```
 
-When you create a profile, `claude-switch` automatically copies your existing Claude config (`~/.claude`) into the new profile directory. This preserves your settings, project memories, custom commands, and conversation history. Use `--no-copy` if you want a clean slate instead.
+When you create a profile, `claude-switch` will ask if you want to copy your existing Claude config (`~/.claude`) into the new profile:
+
+```
+$ claude-switch add work
+  Copy existing Claude settings to new profile? (Y/n)
+```
+
+Answering **Y** (or pressing Enter) preserves your settings, project memories, custom commands, and conversation history. Answering **n** creates a clean profile. Use `--no-copy` to skip the prompt entirely.
 
 ### Copy, reset & duplicate
 
