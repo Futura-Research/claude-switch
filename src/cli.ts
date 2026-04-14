@@ -1,4 +1,4 @@
-import { initConfig, loadConfig } from "./config.js";
+import { initConfig, loadConfig, getClaudeBaseDir } from "./config.js";
 import { addProfile, removeProfile, listProfiles, setDefault } from "./profiles.js";
 import { addRule, removeRule, listRules } from "./rules.js";
 import { resolveProfile, parseArgs } from "./resolver.js";
@@ -47,13 +47,19 @@ export function runWithErrorHandling(fn: () => void): void {
 }
 
 export function handleAdd(args: string[], baseDirOverride?: string): void {
-  const name = requireName(args, "Usage: claude-switch add <name>");
+  const noCopy = args.includes("--no-copy");
+  const filtered = args.filter((a) => a !== "--no-copy");
+  const name = requireName(filtered, "Usage: claude-switch add <name> [--no-copy]");
   initConfig(baseDirOverride);
 
   runWithErrorHandling(() => {
-    const profileDir = addProfile(name, baseDirOverride);
+    const copyFrom = noCopy ? undefined : getClaudeBaseDir();
+    const profileDir = addProfile(name, baseDirOverride, copyFrom ? { copyFrom } : undefined);
     console.log(`\n  Creating profile "${name}"...`);
     console.log(`  Config directory: ${profileDir}\n`);
+    if (!noCopy && copyFrom) {
+      console.log(`  Copied settings from ${copyFrom}`);
+    }
     console.log("  Launching Claude Code to authenticate...");
     console.log("  (complete the login flow in your browser)\n");
 

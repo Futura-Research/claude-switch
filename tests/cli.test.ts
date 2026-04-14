@@ -90,7 +90,7 @@ describe("runWithErrorHandling", () => {
 describe("handleAdd", () => {
   it("creates profile and launches claude", async () => {
     const { launch } = await import("../src/launcher.js");
-    handleAdd(["work"], tmpDir);
+    handleAdd(["work", "--no-copy"], tmpDir);
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Creating profile "work"'));
     expect(launch).toHaveBeenCalled();
   });
