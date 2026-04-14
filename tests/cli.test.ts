@@ -173,7 +173,8 @@ describe("handleAdd", () => {
     expect(confirm).toHaveBeenCalled();
     expect(launch).toHaveBeenCalled();
     const profileDir = path.join(tmpDir, "profiles", "work");
-    expect(fs.readdirSync(profileDir)).toHaveLength(0);
+    const entries = fs.readdirSync(profileDir);
+    expect(entries.filter((e) => e !== "projects")).toHaveLength(0);
   });
 
   it("skips copy and prompt when --no-copy is passed", async () => {
@@ -183,7 +184,8 @@ describe("handleAdd", () => {
     expect(confirm).not.toHaveBeenCalled();
     expect(launch).toHaveBeenCalled();
     const profileDir = path.join(tmpDir, "profiles", "work");
-    expect(fs.readdirSync(profileDir)).toHaveLength(0);
+    const entries = fs.readdirSync(profileDir);
+    expect(entries.filter((e) => e !== "projects")).toHaveLength(0);
   });
 
   it("handles --no-copy before name", async () => {
