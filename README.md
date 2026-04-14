@@ -63,7 +63,8 @@ claude-switch --dangerously-skip-permissions  # same, with flags
 ```bash
 claude-switch add <name>             # Create profile + authenticate
 claude-switch add <name> --no-copy   # Create profile without copying existing settings
-claude-switch remove <name>          # Remove a profile
+claude-switch remove <name>          # Remove a profile and delete its config directory
+claude-switch remove <name> --keep-dir  # Remove but keep the config directory on disk
 claude-switch list                   # List all profiles
 claude-switch default <name>         # Set the default profile
 ```

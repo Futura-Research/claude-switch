@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Interactive copy on profile add**: `claude-switch add <name>` prompts whether to copy existing Claude config into the new profile, then asks which categories to include — Settings, Skills & commands, IDE settings, Conversation history, and In-progress work. Defaults favour useful settings (on) over large data (off).
 - **`--no-copy` flag**: Use `claude-switch add <name> --no-copy` to skip all prompts and create a clean profile.
+- **`--keep-dir` flag on `remove`**: `claude-switch remove <name> --keep-dir` deregisters the profile without deleting its config directory from disk.
 - **`copy-config` command**: `claude-switch copy-config <profile>` copies selected categories from the base Claude config into any existing profile on demand.
 - **`reset` command**: `claude-switch reset <profile>` wipes a profile's config directory clean while keeping the profile registered.
 - **`duplicate` command**: `claude-switch duplicate <source> <new-name>` creates a new profile as a full copy of an existing one (auth and all data preserved, `.git` directories excluded).
@@ -27,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Auth credentials no longer copied**: `oauthAccount` and `userID` are stripped from `.claude.json` when copying settings to a new profile — the new profile prompts for its own login.
 - **`.git` directories excluded from copy**: Plugin and skill directories that are git repositories no longer cause `EACCES` permission errors during config copy.
+- **`remove` now deletes the profile directory**: Previously `remove` only deregistered the profile in config, leaving the directory and all its data on disk. It now deletes the config directory by default. Use `--keep-dir` to get the old behaviour.
 - `run()` now threads `baseDirOverride` through dispatch, fixing test isolation when real profiles exist on the host system.
 
 ## [1.0.0] - 2026-04-11
