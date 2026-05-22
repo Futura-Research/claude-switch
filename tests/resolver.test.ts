@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
-import { initConfig, loadConfig } from "../src/config.js";
+import { initConfig, loadConfig, saveConfig } from "../src/config.js";
 import { addProfile, removeProfile } from "../src/profiles.js";
 import { addRule } from "../src/rules.js";
 import { parseArgs, matchRule, resolveProfile, findProjectProfile } from "../src/resolver.js";
@@ -135,6 +135,14 @@ describe("resolveProfile", () => {
   it("includes the agent of the resolved profile", () => {
     const result = resolveProfile(["--work"], "/", tmpDir);
     expect(result.agent).toBe("claude");
+  });
+
+  it("defaults a legacy profile without an agent field to claude", () => {
+    const config = loadConfig(tmpDir);
+    config.profiles["legacy"] = { config_dir: path.join(tmpDir, "profiles", "legacy") };
+    saveConfig(config, tmpDir);
+
+    expect(resolveProfile(["--legacy"], "/", tmpDir).agent).toBe("claude");
   });
 });
 

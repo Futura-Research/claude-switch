@@ -718,6 +718,18 @@ describe("handleList with agents", () => {
     handleList(tmpDir);
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("work (default) [claude]"));
   });
+
+  it("shows the signed-in account for an authenticated profile", () => {
+    const profileDir = addProfile("work", tmpDir);
+    fs.writeFileSync(
+      path.join(profileDir, ".claude.json"),
+      JSON.stringify({
+        oauthAccount: { emailAddress: "dev@acme.com", organizationName: "Acme" },
+      }),
+    );
+    handleList(tmpDir);
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("dev@acme.com · Acme"));
+  });
 });
 
 describe("handleWhich with agent", () => {
@@ -725,6 +737,16 @@ describe("handleWhich with agent", () => {
     addProfile("work", tmpDir);
     handleWhich(tmpDir);
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("[claude]"));
+  });
+
+  it("shows the signed-in account when the profile is authenticated", () => {
+    const profileDir = addProfile("work", tmpDir);
+    fs.writeFileSync(
+      path.join(profileDir, ".claude.json"),
+      JSON.stringify({ oauthAccount: { emailAddress: "dev@acme.com" } }),
+    );
+    handleWhich(tmpDir);
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Account: dev@acme.com"));
   });
 });
 

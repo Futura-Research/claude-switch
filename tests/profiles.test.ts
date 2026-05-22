@@ -318,6 +318,28 @@ describe("duplicateProfile preserves agent and env", () => {
   });
 });
 
+describe("legacy profiles without an agent field", () => {
+  it("listProfiles defaults a profile with no agent to claude", () => {
+    const config = loadConfig(tmpDir);
+    config.profiles["legacy"] = { config_dir: path.join(tmpDir, "profiles", "legacy") };
+    saveConfig(config, tmpDir);
+
+    expect(listProfiles(tmpDir).find((p) => p.name === "legacy")?.agent).toBe("claude");
+  });
+
+  it("duplicateProfile defaults a source with no agent to claude", () => {
+    const legacyDir = path.join(tmpDir, "profiles", "legacy");
+    fs.mkdirSync(legacyDir, { recursive: true });
+    const config = loadConfig(tmpDir);
+    config.profiles["legacy"] = { config_dir: legacyDir };
+    saveConfig(config, tmpDir);
+
+    duplicateProfile("legacy", "legacy-copy", tmpDir);
+
+    expect(loadConfig(tmpDir).profiles["legacy-copy"].agent).toBe("claude");
+  });
+});
+
 describe("profile environment variables", () => {
   it("sets and reads environment variables", () => {
     addProfile("work", tmpDir);

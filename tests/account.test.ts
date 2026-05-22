@@ -80,4 +80,8 @@ describe("formatAccount", () => {
   it("shows organization alone", () => {
     expect(formatAccount({ organization: "Acme" })).toBe("Acme");
   });
+
+  it("returns an empty string when neither field is set", () => {
+    expect(formatAccount({})).toBe("");
+  });
 });
