@@ -11,6 +11,9 @@ import {
   getDefault,
   duplicateProfile,
   resetProfile,
+  setProfileEnv,
+  unsetProfileEnv,
+  getProfileEnv,
 } from "../src/profiles.js";
 
 let tmpDir: string;
@@ -283,6 +286,100 @@ describe("duplicateProfile", () => {
     expect(result.oauthAccount).toEqual({ token: "secret" });
     expect(result.userID).toBe("u123");
     expect(result.theme).toBe("dark");
+  });
+});
+
+describe("addProfile with agent", () => {
+  it("defaults to the claude agent", () => {
+    addProfile("work", tmpDir);
+    expect(listProfiles(tmpDir)[0].agent).toBe("claude");
+  });
+
+  it("stores the chosen agent", () => {
+    addProfile("work", tmpDir, { agent: "codex" });
+    expect(listProfiles(tmpDir)[0].agent).toBe("codex");
+  });
+
+  it("throws on an unknown agent", () => {
+    expect(() => addProfile("work", tmpDir, { agent: "rovo" })).toThrow('Unknown agent "rovo"');
+  });
+});
+
+describe("duplicateProfile preserves agent and env", () => {
+  it("copies the agent and env onto the duplicate", () => {
+    addProfile("work", tmpDir, { agent: "codex" });
+    setProfileEnv("work", { TOKEN: "abc" }, tmpDir);
+
+    duplicateProfile("work", "work-copy", tmpDir);
+
+    const copy = loadConfig(tmpDir).profiles["work-copy"];
+    expect(copy.agent).toBe("codex");
+    expect(copy.env).toEqual({ TOKEN: "abc" });
+  });
+});
+
+describe("profile environment variables", () => {
+  it("sets and reads environment variables", () => {
+    addProfile("work", tmpDir);
+    setProfileEnv("work", { ANTHROPIC_BASE_URL: "https://gw.acme.com" }, tmpDir);
+
+    expect(getProfileEnv("work", tmpDir)).toEqual({
+      ANTHROPIC_BASE_URL: "https://gw.acme.com",
+    });
+  });
+
+  it("merges new variables with existing ones", () => {
+    addProfile("work", tmpDir);
+    setProfileEnv("work", { A: "1" }, tmpDir);
+    setProfileEnv("work", { B: "2" }, tmpDir);
+
+    expect(getProfileEnv("work", tmpDir)).toEqual({ A: "1", B: "2" });
+  });
+
+  it("unsets a variable", () => {
+    addProfile("work", tmpDir);
+    setProfileEnv("work", { A: "1", B: "2" }, tmpDir);
+    unsetProfileEnv("work", ["A"], tmpDir);
+
+    expect(getProfileEnv("work", tmpDir)).toEqual({ B: "2" });
+  });
+
+  it("drops the env object once the last variable is removed", () => {
+    addProfile("work", tmpDir);
+    setProfileEnv("work", { A: "1" }, tmpDir);
+    unsetProfileEnv("work", ["A"], tmpDir);
+
+    expect(loadConfig(tmpDir).profiles["work"].env).toBeUndefined();
+  });
+
+  it("returns an empty object when no variables are set", () => {
+    addProfile("work", tmpDir);
+    expect(getProfileEnv("work", tmpDir)).toEqual({});
+  });
+
+  it("rejects invalid environment variable names", () => {
+    addProfile("work", tmpDir);
+    expect(() => setProfileEnv("work", { "1BAD": "x" }, tmpDir)).toThrow(
+      "Invalid environment variable name",
+    );
+    expect(() => setProfileEnv("work", { "has-dash": "x" }, tmpDir)).toThrow(
+      "Invalid environment variable name",
+    );
+  });
+
+  it("throws when the profile does not exist", () => {
+    expect(() => setProfileEnv("ghost", { A: "1" }, tmpDir)).toThrow(
+      'Profile "ghost" does not exist.',
+    );
+    expect(() => unsetProfileEnv("ghost", ["A"], tmpDir)).toThrow(
+      'Profile "ghost" does not exist.',
+    );
+    expect(() => getProfileEnv("ghost", tmpDir)).toThrow('Profile "ghost" does not exist.');
+  });
+
+  it("does not error when unsetting a variable that was never set", () => {
+    addProfile("work", tmpDir);
+    expect(() => unsetProfileEnv("work", ["MISSING"], tmpDir)).not.toThrow();
   });
 });
 

@@ -6,41 +6,48 @@ import {
   setDefault,
   resetProfile,
   duplicateProfile,
+  setProfileEnv,
+  unsetProfileEnv,
+  getProfileEnv,
 } from "./profiles.js";
 import { addRule, removeRule, listRules } from "./rules.js";
 import { resolveProfile, parseArgs } from "./resolver.js";
 import { launch } from "./launcher.js";
-import {
-  copyBaseConfig,
-  ensureProjectsLink,
-  COPY_CATEGORIES,
-  type CopyCategory,
-} from "./migrate.js";
+import { copyBaseConfig, ensureSharedDirs, COPY_CATEGORIES, type CopyCategory } from "./migrate.js";
+import { getAgent } from "./agents.js";
+import { readAccountInfo, formatAccount } from "./account.js";
 import { confirm } from "./prompt.js";
 
-const VERSION = "1.1.0";
+const VERSION = "1.2.0";
 
 export function printUsage(): void {
   console.log(
     `
-claude-switch — Switch between multiple Claude Code accounts
+claude-switch — Switch between multiple coding-agent accounts
 
 Usage:
-  claude-switch --<profile> [claude flags...]    Launch claude with a profile
-  claude-switch [claude flags...]                Auto-detect profile from cwd
-  claude-switch add <name> [--no-copy]           Add a new profile (copies settings by default)
-  claude-switch remove <name> [--keep-dir]        Remove a profile (deletes config dir by default)
+  claude-switch --<profile> [agent flags...]     Launch the agent with a profile
+  claude-switch [agent flags...]                 Auto-detect profile from cwd
+  claude-switch add <name> [--agent <id>] [--no-copy]
+                                                 Add a profile (agent: claude|codex|gemini)
+  claude-switch remove <name> [--keep-dir]       Remove a profile (deletes config dir by default)
   claude-switch list                             List all profiles
   claude-switch default <name>                   Set the default profile
   claude-switch copy-config <name>               Copy base Claude config to a profile
   claude-switch reset <name>                     Reset a profile to clean slate
   claude-switch duplicate <source> <new-name>    Duplicate a profile under a new name
+  claude-switch env set <name> KEY=VALUE...      Set per-profile environment variables
+  claude-switch env unset <name> KEY...          Remove per-profile environment variables
+  claude-switch env list <name>                  List a profile's environment variables
   claude-switch rule add <dir> <profile>         Add a directory rule
   claude-switch rule remove <dir>                Remove a directory rule
   claude-switch rule list                        List all rules
   claude-switch which                            Show which profile would be used
   claude-switch --help                           Show this help
   claude-switch --version                        Show version
+
+A repository can pin itself to a profile by committing a ".claude-switch"
+file containing the profile name.
 `.trim(),
   );
 }
@@ -63,15 +70,41 @@ export function runWithErrorHandling(fn: () => void): void {
   }
 }
 
+/** Pulls a `--flag value` pair out of args, returning the value and the rest. */
+export function extractFlagValue(args: string[], flag: string): { value?: string; rest: string[] } {
+  const rest: string[] = [];
+  let value: string | undefined;
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === flag) {
+      value = args[i + 1];
+      i++;
+      continue;
+    }
+    rest.push(args[i]);
+  }
+  return { value, rest };
+}
+
 export async function handleAdd(args: string[], baseDirOverride?: string): Promise<void> {
   const noCopy = args.includes("--no-copy");
-  const filtered = args.filter((a) => a !== "--no-copy");
-  const name = requireName(filtered, "Usage: claude-switch add <name> [--no-copy]");
+  const withoutNoCopy = args.filter((a) => a !== "--no-copy");
+  const { value: agentId, rest } = extractFlagValue(withoutNoCopy, "--agent");
+  const name = requireName(rest, "Usage: claude-switch add <name> [--agent <id>] [--no-copy]");
+
+  let agent;
+  try {
+    agent = getAgent(agentId);
+  } catch (err) {
+    console.error((err as Error).message);
+    process.exit(1);
+    return;
+  }
+
   initConfig(baseDirOverride);
 
   let copyFrom: string | undefined;
   let copyCategories: CopyCategory[] | undefined;
-  if (!noCopy) {
+  if (!noCopy && agent.id === "claude") {
     const baseDir = getClaudeBaseDir();
     const fs = await import("node:fs");
     if (fs.existsSync(baseDir) && fs.readdirSync(baseDir).length > 0) {
@@ -84,21 +117,22 @@ export async function handleAdd(args: string[], baseDirOverride?: string): Promi
   }
 
   runWithErrorHandling(() => {
-    const profileDir = addProfile(
-      name,
-      baseDirOverride,
-      copyFrom && copyCategories?.length ? { copyFrom, categories: copyCategories } : undefined,
-    );
-    ensureProjectsLink(profileDir, getSharedDir(baseDirOverride));
-    console.log(`\n  Creating profile "${name}"...`);
+    const profileDir = addProfile(name, baseDirOverride, {
+      agent: agent.id,
+      ...(copyFrom && copyCategories?.length ? { copyFrom, categories: copyCategories } : {}),
+    });
+    if (agent.supportsSharedSessions) {
+      ensureSharedDirs(profileDir, getSharedDir(baseDirOverride));
+    }
+    console.log(`\n  Creating profile "${name}" (${agent.label})...`);
     console.log(`  Config directory: ${profileDir}\n`);
     if (copyFrom && copyCategories?.length) {
       console.log(`  Copied settings from ${copyFrom}`);
     }
-    console.log("  Launching Claude Code to authenticate...");
+    console.log(`  Launching ${agent.label} to authenticate...`);
     console.log("  (complete the login flow in your browser)\n");
 
-    launch({ configDir: profileDir, args: [] });
+    launch({ configDir: profileDir, args: [], agent });
   });
 }
 
@@ -122,8 +156,12 @@ export function handleList(baseDirOverride?: string): void {
   console.log("\nProfiles:\n");
   for (const p of profiles) {
     const marker = p.isDefault ? " (default)" : "";
-    console.log(`  ${p.name}${marker}`);
+    console.log(`  ${p.name}${marker} [${p.agent}]`);
     console.log(`    ${p.configDir}`);
+    const account = readAccountInfo(p.configDir, p.agent);
+    if (account) {
+      console.log(`    ${formatAccount(account)}`);
+    }
   }
   console.log();
 }
@@ -180,6 +218,74 @@ export function handleRule(args: string[], baseDirOverride?: string): void {
     }
     default:
       console.error("Usage: claude-switch rule <add|remove|list> [args...]");
+      process.exit(1);
+  }
+}
+
+export function handleEnv(args: string[], baseDirOverride?: string): void {
+  const subcommand = args[0];
+
+  switch (subcommand) {
+    case "set": {
+      const name = args[1];
+      const assignments = args.slice(2);
+      if (!name || assignments.length === 0) {
+        console.error("Usage: claude-switch env set <profile> KEY=VALUE [KEY=VALUE...]");
+        process.exit(1);
+        return;
+      }
+      runWithErrorHandling(() => {
+        const vars: Record<string, string> = {};
+        for (const assignment of assignments) {
+          const eq = assignment.indexOf("=");
+          if (eq < 1) {
+            throw new Error(`Invalid assignment "${assignment}". Expected KEY=VALUE.`);
+          }
+          vars[assignment.slice(0, eq)] = assignment.slice(eq + 1);
+        }
+        setProfileEnv(name, vars, baseDirOverride);
+        console.log(`Set ${Object.keys(vars).join(", ")} for profile "${name}".`);
+      });
+      break;
+    }
+    case "unset": {
+      const name = args[1];
+      const keys = args.slice(2);
+      if (!name || keys.length === 0) {
+        console.error("Usage: claude-switch env unset <profile> KEY [KEY...]");
+        process.exit(1);
+        return;
+      }
+      runWithErrorHandling(() => {
+        unsetProfileEnv(name, keys, baseDirOverride);
+        console.log(`Unset ${keys.join(", ")} for profile "${name}".`);
+      });
+      break;
+    }
+    case "list": {
+      const name = args[1];
+      if (!name) {
+        console.error("Usage: claude-switch env list <profile>");
+        process.exit(1);
+        return;
+      }
+      runWithErrorHandling(() => {
+        const env = getProfileEnv(name, baseDirOverride);
+        const keys = Object.keys(env);
+        if (keys.length === 0) {
+          console.log(`No environment variables set for profile "${name}".`);
+          return;
+        }
+        console.log(`\nEnvironment for "${name}":\n`);
+        for (const key of keys) {
+          console.log(`  ${key}=${env[key]}`);
+        }
+        console.log();
+      });
+      break;
+    }
+    default:
+      console.error("Usage: claude-switch env <set|unset|list> <profile> [args...]");
       process.exit(1);
   }
 }
@@ -263,8 +369,13 @@ export function handleReset(args: string[], baseDirOverride?: string): void {
 export function handleWhich(baseDirOverride?: string): void {
   runWithErrorHandling(() => {
     const resolved = resolveProfile([], process.cwd(), baseDirOverride);
-    console.log(`Profile: ${resolved.name} (via ${resolved.source})`);
+    const agent = getAgent(resolved.agent);
+    console.log(`Profile: ${resolved.name} (via ${resolved.source}) [${agent.id}]`);
     console.log(`Config:  ${resolved.configDir}`);
+    const account = readAccountInfo(resolved.configDir, agent.id);
+    if (account) {
+      console.log(`Account: ${formatAccount(account)}`);
+    }
   });
 }
 
@@ -274,8 +385,16 @@ export function launchClaude(args: string[], baseDirOverride?: string): void {
     const resolved = resolveProfile(args, process.cwd(), baseDirOverride);
     const config = loadConfig(baseDirOverride);
     const { claudeArgs } = parseArgs(args, config);
-    ensureProjectsLink(resolved.configDir, getSharedDir(baseDirOverride));
-    launch({ configDir: resolved.configDir, args: claudeArgs });
+    const agent = getAgent(resolved.agent);
+    if (agent.supportsSharedSessions) {
+      ensureSharedDirs(resolved.configDir, getSharedDir(baseDirOverride));
+    }
+    launch({
+      configDir: resolved.configDir,
+      args: claudeArgs,
+      agent,
+      extraEnv: config.profiles[resolved.name]?.env,
+    });
   });
 }
 
@@ -295,6 +414,7 @@ export function run(argv: string[], baseDirOverride?: string): void | Promise<vo
     list: () => handleList(baseDirOverride),
     default: (args) => handleDefault(args, baseDirOverride),
     rule: (args) => handleRule(args, baseDirOverride),
+    env: (args) => handleEnv(args, baseDirOverride),
     "copy-config": (args) => handleCopyConfig(args, baseDirOverride),
     reset: (args) => handleReset(args, baseDirOverride),
     duplicate: (args) => handleDuplicate(args, baseDirOverride),

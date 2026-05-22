@@ -5,7 +5,7 @@ import * as os from "node:os";
 import { initConfig, loadConfig } from "../src/config.js";
 import { addProfile, removeProfile } from "../src/profiles.js";
 import { addRule } from "../src/rules.js";
-import { parseArgs, matchRule, resolveProfile } from "../src/resolver.js";
+import { parseArgs, matchRule, resolveProfile, findProjectProfile } from "../src/resolver.js";
 
 let tmpDir: string;
 
@@ -130,5 +130,89 @@ describe("resolveProfile", () => {
     const result = resolveProfile(["--work"], "/", tmpDir);
     expect(result.configDir).toContain("profiles");
     expect(result.configDir).toContain("work");
+  });
+
+  it("includes the agent of the resolved profile", () => {
+    const result = resolveProfile(["--work"], "/", tmpDir);
+    expect(result.agent).toBe("claude");
+  });
+});
+
+describe("findProjectProfile", () => {
+  let projectDir: string;
+
+  beforeEach(() => {
+    projectDir = fs.mkdtempSync(path.join(os.tmpdir(), "claude-switch-project-"));
+  });
+
+  afterEach(() => {
+    fs.rmSync(projectDir, { recursive: true, force: true });
+  });
+
+  it("returns null when no .claude-switch file exists", () => {
+    expect(findProjectProfile(projectDir)).toBeNull();
+  });
+
+  it("reads the profile name from a .claude-switch file", () => {
+    fs.writeFileSync(path.join(projectDir, ".claude-switch"), "work\n");
+    const match = findProjectProfile(projectDir);
+    expect(match?.profile).toBe("work");
+    expect(match?.file).toBe(path.join(projectDir, ".claude-switch"));
+  });
+
+  it("finds the file in a parent directory", () => {
+    fs.writeFileSync(path.join(projectDir, ".claude-switch"), "work\n");
+    const nested = path.join(projectDir, "src", "deep");
+    fs.mkdirSync(nested, { recursive: true });
+    expect(findProjectProfile(nested)?.profile).toBe("work");
+  });
+
+  it("ignores comments and blank lines", () => {
+    fs.writeFileSync(path.join(projectDir, ".claude-switch"), "# team profile\n\n  personal  \n");
+    expect(findProjectProfile(projectDir)?.profile).toBe("personal");
+  });
+
+  it("returns null when the file has only comments", () => {
+    fs.writeFileSync(path.join(projectDir, ".claude-switch"), "# nothing here\n");
+    expect(findProjectProfile(projectDir)).toBeNull();
+  });
+});
+
+describe("resolveProfile with project file", () => {
+  let projectDir: string;
+
+  beforeEach(() => {
+    projectDir = fs.mkdtempSync(path.join(os.tmpdir(), "claude-switch-project-"));
+  });
+
+  afterEach(() => {
+    fs.rmSync(projectDir, { recursive: true, force: true });
+  });
+
+  it("resolves from a committed .claude-switch file", () => {
+    fs.writeFileSync(path.join(projectDir, ".claude-switch"), "personal\n");
+    const result = resolveProfile([], projectDir, tmpDir);
+    expect(result.name).toBe("personal");
+    expect(result.source).toBe("project");
+  });
+
+  it("lets an explicit flag override the project file", () => {
+    fs.writeFileSync(path.join(projectDir, ".claude-switch"), "personal\n");
+    const result = resolveProfile(["--work"], projectDir, tmpDir);
+    expect(result.name).toBe("work");
+    expect(result.source).toBe("flag");
+  });
+
+  it("takes precedence over directory rules", () => {
+    fs.writeFileSync(path.join(projectDir, ".claude-switch"), "personal\n");
+    addRule(projectDir, "work", tmpDir);
+    const result = resolveProfile([], projectDir, tmpDir);
+    expect(result.name).toBe("personal");
+    expect(result.source).toBe("project");
+  });
+
+  it("throws when the project file names an unknown profile", () => {
+    fs.writeFileSync(path.join(projectDir, ".claude-switch"), "ghost\n");
+    expect(() => resolveProfile([], projectDir, tmpDir)).toThrow('Profile "ghost" referenced in');
   });
 });

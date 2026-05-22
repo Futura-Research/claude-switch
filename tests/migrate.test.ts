@@ -5,7 +5,9 @@ import * as os from "node:os";
 import {
   copyBaseConfig,
   copyDir,
-  ensureProjectsLink,
+  ensureSharedDirs,
+  ensureSharedLink,
+  SHARED_SUBDIRS,
   resetProfileDir,
   stripAuthFromClaudeJson,
 } from "../src/migrate.js";
@@ -273,36 +275,36 @@ describe("copyDir", () => {
   });
 });
 
-describe("ensureProjectsLink", () => {
-  it("creates a symlink to the shared projects dir", () => {
+describe("ensureSharedLink", () => {
+  it("creates a symlink to the shared subdirectory", () => {
     const profileDir = path.join(tmpDir, "profile");
     const sharedDir = path.join(tmpDir, "shared");
     fs.mkdirSync(profileDir);
 
-    ensureProjectsLink(profileDir, sharedDir);
+    ensureSharedLink(profileDir, sharedDir, "projects");
 
     const linkPath = path.join(profileDir, "projects");
     expect(fs.lstatSync(linkPath).isSymbolicLink()).toBe(true);
     expect(fs.readlinkSync(linkPath)).toBe(path.join(sharedDir, "projects"));
   });
 
-  it("creates the shared projects dir if it does not exist", () => {
+  it("creates the shared subdirectory if it does not exist", () => {
     const profileDir = path.join(tmpDir, "profile");
     const sharedDir = path.join(tmpDir, "shared");
     fs.mkdirSync(profileDir);
 
-    ensureProjectsLink(profileDir, sharedDir);
+    ensureSharedLink(profileDir, sharedDir, "todos");
 
-    expect(fs.existsSync(path.join(sharedDir, "projects"))).toBe(true);
+    expect(fs.existsSync(path.join(sharedDir, "todos"))).toBe(true);
   });
 
-  it("does not touch an existing real projects directory", () => {
+  it("does not touch an existing real directory", () => {
     const profileDir = path.join(tmpDir, "profile");
     const sharedDir = path.join(tmpDir, "shared");
     fs.mkdirSync(path.join(profileDir, "projects"), { recursive: true });
     fs.writeFileSync(path.join(profileDir, "projects", "chat.json"), "{}");
 
-    ensureProjectsLink(profileDir, sharedDir);
+    ensureSharedLink(profileDir, sharedDir, "projects");
 
     expect(fs.lstatSync(path.join(profileDir, "projects")).isSymbolicLink()).toBe(false);
     expect(fs.existsSync(path.join(profileDir, "projects", "chat.json"))).toBe(true);
@@ -316,9 +318,42 @@ describe("ensureProjectsLink", () => {
     fs.mkdirSync(otherTarget);
     fs.symlinkSync(otherTarget, path.join(profileDir, "projects"));
 
-    ensureProjectsLink(profileDir, sharedDir);
+    ensureSharedLink(profileDir, sharedDir, "projects");
 
     expect(fs.readlinkSync(path.join(profileDir, "projects"))).toBe(otherTarget);
+  });
+});
+
+describe("ensureSharedDirs", () => {
+  it("symlinks every shared subdirectory", () => {
+    const profileDir = path.join(tmpDir, "profile");
+    const sharedDir = path.join(tmpDir, "shared");
+    fs.mkdirSync(profileDir);
+
+    ensureSharedDirs(profileDir, sharedDir);
+
+    for (const name of SHARED_SUBDIRS) {
+      const linkPath = path.join(profileDir, name);
+      expect(fs.lstatSync(linkPath).isSymbolicLink()).toBe(true);
+      expect(fs.readlinkSync(linkPath)).toBe(path.join(sharedDir, name));
+    }
+  });
+
+  it("shares projects, todos, and shell-snapshots", () => {
+    expect([...SHARED_SUBDIRS]).toEqual(["projects", "todos", "shell-snapshots"]);
+  });
+
+  it("leaves a profile's existing real subdirectory untouched", () => {
+    const profileDir = path.join(tmpDir, "profile");
+    const sharedDir = path.join(tmpDir, "shared");
+    fs.mkdirSync(path.join(profileDir, "todos"), { recursive: true });
+    fs.writeFileSync(path.join(profileDir, "todos", "keep.json"), "[]");
+
+    ensureSharedDirs(profileDir, sharedDir);
+
+    expect(fs.lstatSync(path.join(profileDir, "todos")).isSymbolicLink()).toBe(false);
+    expect(fs.existsSync(path.join(profileDir, "todos", "keep.json"))).toBe(true);
+    expect(fs.lstatSync(path.join(profileDir, "projects")).isSymbolicLink()).toBe(true);
   });
 });
 

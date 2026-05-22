@@ -4,6 +4,10 @@ import * as os from "node:os";
 
 export interface Profile {
   config_dir: string;
+  /** Coding agent this profile drives. Defaults to `claude` when absent. */
+  agent?: string;
+  /** Extra environment variables injected when launching the agent. */
+  env?: Record<string, string>;
 }
 
 export interface Rule {

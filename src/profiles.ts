@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import { loadConfig, saveConfig, getProfileDir } from "./config.js";
 import { copyBaseConfig, copyDir, resetProfileDir, type CopyCategory } from "./migrate.js";
+import { getAgent } from "./agents.js";
 
 const RESERVED_NAMES = [
   "help",
@@ -14,6 +15,7 @@ const RESERVED_NAMES = [
   "copy-config",
   "reset",
   "duplicate",
+  "env",
 ];
 
 function validateProfileName(name: string): void {
@@ -34,9 +36,11 @@ const DEFAULT_COPY_CATEGORIES: CopyCategory[] = ["settings", "skills", "ide"];
 export function addProfile(
   name: string,
   baseDirOverride?: string,
-  options?: { copyFrom?: string; categories?: CopyCategory[] },
+  options?: { copyFrom?: string; categories?: CopyCategory[]; agent?: string },
 ): string {
   validateProfileName(name);
+
+  const agent = getAgent(options?.agent);
 
   const config = loadConfig(baseDirOverride);
 
@@ -51,7 +55,7 @@ export function addProfile(
     copyBaseConfig(options.copyFrom, profileDir, options.categories ?? DEFAULT_COPY_CATEGORIES);
   }
 
-  config.profiles[name] = { config_dir: profileDir };
+  config.profiles[name] = { config_dir: profileDir, agent: agent.id };
 
   if (!config.default) {
     config.default = name;
@@ -91,13 +95,14 @@ export function removeProfile(
 
 export function listProfiles(
   baseDirOverride?: string,
-): { name: string; configDir: string; isDefault: boolean }[] {
+): { name: string; configDir: string; isDefault: boolean; agent: string }[] {
   const config = loadConfig(baseDirOverride);
 
   return Object.entries(config.profiles).map(([name, profile]) => ({
     name,
     configDir: profile.config_dir,
     isDefault: config.default === name,
+    agent: profile.agent ?? "claude",
   }));
 }
 
@@ -136,15 +141,19 @@ export function duplicateProfile(
     throw new Error(`Profile "${targetName}" already exists.`);
   }
 
-  const sourceDir = config.profiles[sourceName].config_dir;
+  const source = config.profiles[sourceName];
   const targetDir = getProfileDir(targetName, baseDirOverride);
-  if (fs.existsSync(sourceDir)) {
-    copyDir(sourceDir, targetDir);
+  if (fs.existsSync(source.config_dir)) {
+    copyDir(source.config_dir, targetDir);
   } else {
     fs.mkdirSync(targetDir, { recursive: true });
   }
 
-  config.profiles[targetName] = { config_dir: targetDir };
+  config.profiles[targetName] = {
+    config_dir: targetDir,
+    agent: source.agent ?? "claude",
+    ...(source.env ? { env: { ...source.env } } : {}),
+  };
   saveConfig(config, baseDirOverride);
 
   return targetDir;
@@ -158,4 +167,59 @@ export function resetProfile(name: string, baseDirOverride?: string): void {
   }
 
   resetProfileDir(config.profiles[name].config_dir);
+}
+
+function validateEnvKey(key: string): void {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+    throw new Error(
+      `Invalid environment variable name "${key}". Use letters, digits, and underscores (must not start with a digit).`,
+    );
+  }
+}
+
+export function setProfileEnv(
+  name: string,
+  vars: Record<string, string>,
+  baseDirOverride?: string,
+): void {
+  const config = loadConfig(baseDirOverride);
+  const profile = config.profiles[name];
+  if (!profile) {
+    throw new Error(`Profile "${name}" does not exist.`);
+  }
+
+  for (const key of Object.keys(vars)) {
+    validateEnvKey(key);
+  }
+
+  profile.env = { ...(profile.env ?? {}), ...vars };
+  saveConfig(config, baseDirOverride);
+}
+
+export function unsetProfileEnv(name: string, keys: string[], baseDirOverride?: string): void {
+  const config = loadConfig(baseDirOverride);
+  const profile = config.profiles[name];
+  if (!profile) {
+    throw new Error(`Profile "${name}" does not exist.`);
+  }
+
+  if (profile.env) {
+    for (const key of keys) {
+      delete profile.env[key];
+    }
+    if (Object.keys(profile.env).length === 0) {
+      delete profile.env;
+    }
+  }
+
+  saveConfig(config, baseDirOverride);
+}
+
+export function getProfileEnv(name: string, baseDirOverride?: string): Record<string, string> {
+  const config = loadConfig(baseDirOverride);
+  const profile = config.profiles[name];
+  if (!profile) {
+    throw new Error(`Profile "${name}" does not exist.`);
+  }
+  return profile.env ?? {};
 }
