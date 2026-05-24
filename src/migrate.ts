@@ -119,17 +119,36 @@ export function copyBaseConfig(
   return { copied: true };
 }
 
-export function ensureProjectsLink(profileDir: string, sharedDir: string): void {
-  const projectsPath = path.join(profileDir, "projects");
+/**
+ * Claude Code config subdirectories that, when shared across profiles, let a
+ * session started under one profile be resumed under another in the same
+ * project. `projects` holds the transcripts, `todos` the per-session todo
+ * lists, and `shell-snapshots` the captured shell environments they reference.
+ */
+export const SHARED_SUBDIRS = ["projects", "todos", "shell-snapshots"] as const;
+
+export function ensureSharedLink(profileDir: string, sharedDir: string, name: string): void {
+  const linkPath = path.join(profileDir, name);
   try {
-    fs.lstatSync(projectsPath);
+    fs.lstatSync(linkPath);
     return; // already exists (real dir or any symlink) — leave it alone
   } catch {
     // does not exist — create symlink
   }
-  const sharedProjects = path.join(sharedDir, "projects");
-  fs.mkdirSync(sharedProjects, { recursive: true });
-  fs.symlinkSync(sharedProjects, projectsPath);
+  const sharedTarget = path.join(sharedDir, name);
+  fs.mkdirSync(sharedTarget, { recursive: true });
+  fs.symlinkSync(sharedTarget, linkPath);
+}
+
+/**
+ * Symlinks each shareable subdirectory of a profile to a common location so
+ * conversation history, todos, and shell snapshots are shared between
+ * profiles. Existing real directories or symlinks are left untouched.
+ */
+export function ensureSharedDirs(profileDir: string, sharedDir: string): void {
+  for (const name of SHARED_SUBDIRS) {
+    ensureSharedLink(profileDir, sharedDir, name);
+  }
 }
 
 export function resetProfileDir(profileDir: string): void {

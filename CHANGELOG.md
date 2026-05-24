@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-05-22
+
+### Added
+
+- **Multi-agent support**: profiles now drive Claude Code, OpenAI Codex CLI, or Gemini CLI. Create one with `claude-switch add <name> --agent <claude|codex|gemini>`; the launcher sets the agent's own config-directory environment variable (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, or `GEMINI_CONFIG_DIR`) and spawns the right binary. Existing profiles default to `claude`.
+- **Project-pinned profiles**: a repository can commit a `.claude-switch` file naming the profile it should use. `claude-switch` walks up from the working directory to find it. Resolution priority is now flag > project file > directory rule > default.
+- **Per-profile environment variables**: `claude-switch env set/unset/list <profile>` stores environment variables that are injected when the agent launches — useful for API gateways, proxies, or model overrides.
+- **Account info in `list` and `which`**: both commands now show each profile's agent and, for authenticated Claude profiles, the signed-in account email and organization.
+- **Complete cross-profile session sharing**: in addition to `projects/`, the `todos/` and `shell-snapshots/` directories are now symlinked into the shared store, so a Claude session started under one profile can be fully resumed under another in the same project.
+- `agents.ts` with an `AgentAdapter` registry and `getAgent()` lookup.
+- `account.ts` with `readAccountInfo()` and `formatAccount()`.
+- `findProjectProfile()` resolver helper and the `.claude-switch` project file.
+- `setProfileEnv()`, `unsetProfileEnv()`, and `getProfileEnv()` profile helpers.
+- `ensureSharedDirs()` / `ensureSharedLink()` and the `SHARED_SUBDIRS` list, replacing `ensureProjectsLink()`.
+- `findBinary()` launcher helper (replaces the Claude-specific `findClaude()`).
+
+### Changed
+
+- `Profile` config entries gain optional `agent` and `env` fields. Old configs without them are read as `claude` profiles with no extra environment — no migration required.
+- `add` only prompts to copy base config for Claude profiles, since the copy categories describe the `~/.claude` layout.
+
 ## [1.1.0] - 2026-04-15
 
 ### Added

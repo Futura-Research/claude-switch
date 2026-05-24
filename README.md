@@ -3,9 +3,11 @@
 [![Maintainability](https://qlty.sh/gh/Futura-Research/projects/claude-switch/maintainability.svg)](https://qlty.sh/gh/Futura-Research/projects/claude-switch)
 [![Code Coverage](https://qlty.sh/gh/Futura-Research/projects/claude-switch/coverage.svg)](https://qlty.sh/gh/Futura-Research/projects/claude-switch)
 
-Switch between multiple Claude Code accounts with named profiles.
+Switch between multiple coding-agent accounts with named profiles.
 
-If you use Claude Code with more than one Anthropic account (e.g. work + personal), `claude-switch` eliminates the constant log out / log in cycle by giving each account its own isolated config directory.
+If you use Claude Code — or OpenAI Codex CLI or Gemini CLI — with more than one account (e.g. work + personal), `claude-switch` eliminates the constant log out / log in cycle by giving each account its own isolated config directory.
+
+Each profile is bound to an **agent** (`claude`, `codex`, or `gemini`). Launching a profile sets that agent's config-directory environment variable and spawns its binary, so a company Claude account, a personal Claude account, and a Codex account can all coexist on one machine.
 
 ## Install
 
@@ -22,11 +24,12 @@ npx @futura-research/claude-switch --help
 ## Quick Start
 
 ```bash
-# Create profiles (launches Claude Code auth for each)
+# Create profiles (launches the agent's auth flow for each)
 claude-switch add work
 claude-switch add personal
+claude-switch add work-codex --agent codex
 
-# Launch Claude with a specific profile
+# Launch the agent with a specific profile
 claude-switch --work
 claude-switch --personal --dangerously-skip-permissions
 
@@ -36,13 +39,13 @@ claude-switch which
 
 ## Usage
 
-### Launch Claude with a profile
+### Launch an agent with a profile
 
 ```bash
-claude-switch --<profile> [any claude flags...]
+claude-switch --<profile> [any agent flags...]
 ```
 
-Everything after the profile flag is passed straight through to `claude`.
+Everything after the profile flag is passed straight through to the profile's agent.
 
 ```bash
 claude-switch --work -p "fix the tests"
@@ -62,10 +65,11 @@ claude-switch --dangerously-skip-permissions  # same, with flags
 
 ```bash
 claude-switch add <name>             # Create profile + authenticate
+claude-switch add <name> --agent codex  # Create a profile for a different agent
 claude-switch add <name> --no-copy   # Create profile without copying existing settings
 claude-switch remove <name>          # Remove a profile and delete its config directory
 claude-switch remove <name> --keep-dir  # Remove but keep the config directory on disk
-claude-switch list                   # List all profiles
+claude-switch list                   # List all profiles (shows agent + signed-in account)
 claude-switch default <name>         # Set the default profile
 ```
 
@@ -115,11 +119,52 @@ claude-switch copy-config work    # restore from base config
 claude-switch duplicate work work-staging
 ```
 
-### Shared project history
+### Multiple coding agents
 
-All profiles share a single `projects/` directory at `~/.claude-switch/shared/projects/`. This avoids duplicating the 1GB+ of conversation history that Claude stores per directory.
+Each profile drives a coding agent. Pass `--agent` when creating one:
 
-The symlink is created automatically on first launch or profile creation. Existing profiles that already have a real `projects/` directory are left untouched.
+```bash
+claude-switch add work               # defaults to claude
+claude-switch add work-codex --agent codex
+claude-switch add personal-gemini --agent gemini
+```
+
+| Agent    | `--agent` id | Binary   | Config dir env var   |
+| -------- | ------------ | -------- | -------------------- |
+| Claude Code | `claude`  | `claude` | `CLAUDE_CONFIG_DIR`  |
+| OpenAI Codex CLI | `codex` | `codex` | `CODEX_HOME`     |
+| Gemini CLI | `gemini`   | `gemini` | `GEMINI_CONFIG_DIR` |
+
+Launching a profile sets the matching environment variable to the profile's config directory and spawns that agent's binary. Profiles created before 1.2.0 (and any without an explicit agent) are treated as `claude`.
+
+> Gemini CLI honours `GEMINI_CONFIG_DIR` on macOS and Linux; it is not respected on Windows.
+
+### Project-pinned profiles
+
+A repository can pin itself to a profile by committing a `.claude-switch` file at its root containing the profile name:
+
+```bash
+echo work > .claude-switch
+```
+
+When you run `claude-switch` anywhere inside that repository, it uses the named profile. This is committed with the repo, so teammates who share the profile name get the right account automatically — no per-machine setup. Lines starting with `#` are treated as comments.
+
+### Per-profile environment variables
+
+Attach environment variables to a profile; they are injected whenever that profile launches. Useful for API gateways, proxies, or model overrides:
+
+```bash
+claude-switch env set work ANTHROPIC_BASE_URL=https://gateway.company.com
+claude-switch env set work HTTPS_PROXY=http://proxy.company.com:8080
+claude-switch env list work
+claude-switch env unset work HTTPS_PROXY
+```
+
+### Shared session history
+
+By default all Claude profiles share a single set of session directories under `~/.claude-switch/shared/` — `projects/` (conversation transcripts), `todos/` (per-session todo lists), and `shell-snapshots/`. This avoids duplicating the 1GB+ of history Claude stores per directory, and means a session you started in a project under your **work** profile can be resumed under your **personal** profile in the same project — `claude --resume` sees it.
+
+The symlinks are created automatically on first launch or profile creation. Existing profiles that already have a real `projects/` (or `todos/` / `shell-snapshots/`) directory are left untouched. Codex and Gemini profiles are not shared, since their on-disk layouts differ.
 
 ### Directory rules
 
@@ -153,26 +198,28 @@ claude                    # auto-detects from directory
 ## How it works
 
 ```
-claude-switch --<profile> [claude flags...]
+claude-switch --<profile> [agent flags...]
        │
        ├─ Looks up <profile> in ~/.claude-switch/config.json
-       ├─ Sets CLAUDE_CONFIG_DIR to the profile's config directory
-       ├─ Spawns: claude [claude flags...]
+       ├─ Sets the agent's config-dir env var to the profile's directory
+       ├─ Injects the profile's environment variables
+       ├─ Spawns the agent's binary [agent flags...]
        └─ Inherits stdio (fully interactive)
 ```
 
 Resolution order:
 
 1. `--<profile>` flag (if it matches a known profile name)
-2. Directory rules (longest prefix match)
-3. Default profile
+2. `.claude-switch` project file (searched from cwd upward)
+3. Directory rules (longest prefix match)
+4. Default profile
 
 Config is stored at `~/.claude-switch/config.json`. Each profile gets its own directory under `~/.claude-switch/profiles/<name>/`.
 
 ## Requirements
 
 - Node.js >= 18
-- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed
+- The CLI for whichever agent a profile uses, installed and on your `PATH` — [Claude Code](https://docs.anthropic.com/en/docs/claude-code), OpenAI Codex CLI, or Gemini CLI
 
 ## License
 

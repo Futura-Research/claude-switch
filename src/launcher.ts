@@ -1,13 +1,14 @@
 import { spawnSync } from "node:child_process";
 import * as path from "node:path";
 import { expandTilde } from "./config.js";
+import { AGENTS, type AgentAdapter } from "./agents.js";
 
 /* v8 ignore start — integration boundary: relies on system `which` */
-export function findClaude(): string {
-  const result = spawnSync("which", ["claude"], { encoding: "utf-8" });
+export function findBinary(agent: AgentAdapter): string {
+  const result = spawnSync("which", [agent.binary], { encoding: "utf-8" });
   if (result.status !== 0 || !result.stdout.trim()) {
     throw new Error(
-      "Claude Code CLI not found. Install it first: https://docs.anthropic.com/en/docs/claude-code",
+      `${agent.label} ("${agent.binary}") not found on PATH. Install it and try again.`,
     );
   }
   return result.stdout.trim();
@@ -17,13 +18,20 @@ export function findClaude(): string {
 export interface LaunchOptions {
   configDir: string;
   args: string[];
-  claudePath?: string;
+  agent?: AgentAdapter;
+  extraEnv?: Record<string, string>;
+  binaryPath?: string;
 }
 
-export function buildLaunchEnv(configDir: string): Record<string, string | undefined> {
+export function buildLaunchEnv(
+  configDir: string,
+  agent: AgentAdapter = AGENTS.claude,
+  extraEnv?: Record<string, string>,
+): Record<string, string | undefined> {
   return {
     ...process.env,
-    CLAUDE_CONFIG_DIR: path.resolve(expandTilde(configDir)),
+    ...extraEnv,
+    [agent.configEnvVar]: path.resolve(expandTilde(configDir)),
   };
 }
 
@@ -31,13 +39,14 @@ export function buildLaunchArgs(args: string[]): string[] {
   return [...args];
 }
 
-/* v8 ignore start — integration boundary: spawns claude + process.exit */
+/* v8 ignore start — integration boundary: spawns the agent + process.exit */
 export function launch(options: LaunchOptions): never {
-  const claudePath = options.claudePath ?? findClaude();
-  const env = buildLaunchEnv(options.configDir);
+  const agent = options.agent ?? AGENTS.claude;
+  const binaryPath = options.binaryPath ?? findBinary(agent);
+  const env = buildLaunchEnv(options.configDir, agent, options.extraEnv);
   const args = buildLaunchArgs(options.args);
 
-  const result = spawnSync(claudePath, args, {
+  const result = spawnSync(binaryPath, args, {
     env,
     stdio: "inherit",
   });

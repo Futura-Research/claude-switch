@@ -11,11 +11,13 @@ import {
   printVersion,
   requireName,
   runWithErrorHandling,
+  extractFlagValue,
   handleAdd,
   handleRemove,
   handleList,
   handleDefault,
   handleRule,
+  handleEnv,
   handleCopyConfig,
   handleReset,
   handleDuplicate,
@@ -23,6 +25,8 @@ import {
   launchClaude,
   promptCopyCategories,
 } from "../src/cli.js";
+import { loadConfig } from "../src/config.js";
+import { setProfileEnv } from "../src/profiles.js";
 
 // Mock launcher to avoid spawning real processes
 vi.mock("../src/launcher.js", () => ({
@@ -173,8 +177,9 @@ describe("handleAdd", () => {
     expect(confirm).toHaveBeenCalled();
     expect(launch).toHaveBeenCalled();
     const profileDir = path.join(tmpDir, "profiles", "work");
+    const sharedDirs = ["projects", "todos", "shell-snapshots"];
     const entries = fs.readdirSync(profileDir);
-    expect(entries.filter((e) => e !== "projects")).toHaveLength(0);
+    expect(entries.filter((e) => !sharedDirs.includes(e))).toHaveLength(0);
   });
 
   it("skips copy and prompt when --no-copy is passed", async () => {
@@ -184,8 +189,9 @@ describe("handleAdd", () => {
     expect(confirm).not.toHaveBeenCalled();
     expect(launch).toHaveBeenCalled();
     const profileDir = path.join(tmpDir, "profiles", "work");
+    const sharedDirs = ["projects", "todos", "shell-snapshots"];
     const entries = fs.readdirSync(profileDir);
-    expect(entries.filter((e) => e !== "projects")).toHaveLength(0);
+    expect(entries.filter((e) => !sharedDirs.includes(e))).toHaveLength(0);
   });
 
   it("handles --no-copy before name", async () => {
@@ -657,6 +663,155 @@ describe("launchClaude", () => {
     launchClaude([], tmpDir);
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("No profile found"));
     expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+});
+
+describe("extractFlagValue", () => {
+  it("pulls a flag and its value out of the args", () => {
+    const { value, rest } = extractFlagValue(["work", "--agent", "codex"], "--agent");
+    expect(value).toBe("codex");
+    expect(rest).toEqual(["work"]);
+  });
+
+  it("handles the flag appearing before other args", () => {
+    const { value, rest } = extractFlagValue(["--agent", "gemini", "work"], "--agent");
+    expect(value).toBe("gemini");
+    expect(rest).toEqual(["work"]);
+  });
+
+  it("returns undefined when the flag is absent", () => {
+    const { value, rest } = extractFlagValue(["work"], "--agent");
+    expect(value).toBeUndefined();
+    expect(rest).toEqual(["work"]);
+  });
+});
+
+describe("handleAdd with --agent", () => {
+  it("creates a profile for a non-claude agent without prompting to copy", async () => {
+    const { launch } = await import("../src/launcher.js");
+    const { confirm } = await import("../src/prompt.js");
+
+    await handleAdd(["work", "--agent", "codex"], tmpDir);
+
+    expect(confirm).not.toHaveBeenCalled();
+    expect(launch).toHaveBeenCalled();
+    expect(loadConfig(tmpDir).profiles["work"].agent).toBe("codex");
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("OpenAI Codex CLI"));
+  });
+
+  it("does not create claude shared dirs for a codex profile", async () => {
+    await handleAdd(["work", "--agent", "codex"], tmpDir);
+    const entries = fs.readdirSync(path.join(tmpDir, "profiles", "work"));
+    expect(entries).toHaveLength(0);
+  });
+
+  it("exits on an unknown agent", async () => {
+    await handleAdd(["work", "--agent", "rovo"], tmpDir);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Unknown agent "rovo"'));
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+});
+
+describe("handleList with agents", () => {
+  it("shows the agent next to each profile", () => {
+    addProfile("work", tmpDir);
+    handleList(tmpDir);
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("work (default) [claude]"));
+  });
+
+  it("shows the signed-in account for an authenticated profile", () => {
+    const profileDir = addProfile("work", tmpDir);
+    fs.writeFileSync(
+      path.join(profileDir, ".claude.json"),
+      JSON.stringify({
+        oauthAccount: { emailAddress: "dev@acme.com", organizationName: "Acme" },
+      }),
+    );
+    handleList(tmpDir);
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("dev@acme.com · Acme"));
+  });
+});
+
+describe("handleWhich with agent", () => {
+  it("shows the resolved agent", () => {
+    addProfile("work", tmpDir);
+    handleWhich(tmpDir);
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("[claude]"));
+  });
+
+  it("shows the signed-in account when the profile is authenticated", () => {
+    const profileDir = addProfile("work", tmpDir);
+    fs.writeFileSync(
+      path.join(profileDir, ".claude.json"),
+      JSON.stringify({ oauthAccount: { emailAddress: "dev@acme.com" } }),
+    );
+    handleWhich(tmpDir);
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Account: dev@acme.com"));
+  });
+});
+
+describe("handleEnv", () => {
+  it("sets environment variables on a profile", () => {
+    addProfile("work", tmpDir);
+    handleEnv(["set", "work", "ANTHROPIC_BASE_URL=https://gw.acme.com"], tmpDir);
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("ANTHROPIC_BASE_URL"));
+    expect(loadConfig(tmpDir).profiles["work"].env).toEqual({
+      ANTHROPIC_BASE_URL: "https://gw.acme.com",
+    });
+  });
+
+  it("rejects an assignment without an equals sign", () => {
+    addProfile("work", tmpDir);
+    handleEnv(["set", "work", "BAD"], tmpDir);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("Invalid assignment"));
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it("exits when set is missing arguments", () => {
+    handleEnv(["set", "work"], tmpDir);
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it("unsets environment variables", () => {
+    addProfile("work", tmpDir);
+    setProfileEnv("work", { A: "1", B: "2" }, tmpDir);
+    handleEnv(["unset", "work", "A"], tmpDir);
+    expect(loadConfig(tmpDir).profiles["work"].env).toEqual({ B: "2" });
+  });
+
+  it("exits when unset is missing arguments", () => {
+    handleEnv(["unset", "work"], tmpDir);
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it("lists environment variables", () => {
+    addProfile("work", tmpDir);
+    setProfileEnv("work", { TOKEN: "secret" }, tmpDir);
+    handleEnv(["list", "work"], tmpDir);
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("TOKEN=secret"));
+  });
+
+  it("reports when a profile has no environment variables", () => {
+    addProfile("work", tmpDir);
+    handleEnv(["list", "work"], tmpDir);
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("No environment variables"));
+  });
+
+  it("exits when list is missing the profile name", () => {
+    handleEnv(["list"], tmpDir);
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it("exits on an unknown subcommand", () => {
+    handleEnv(["bogus"], tmpDir);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("Usage: claude-switch env"));
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it("dispatches correctly via run", () => {
+    addProfile("work", tmpDir);
+    run(["env", "set", "work", "X=1"], tmpDir);
+    expect(loadConfig(tmpDir).profiles["work"].env).toEqual({ X: "1" });
   });
 });
 
