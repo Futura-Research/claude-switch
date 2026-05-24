@@ -176,7 +176,7 @@ Config is stored at `~/.claude-switch/config.json`. Each profile gets its own di
 
 ## License
 
-Apache 2.0 + Commons Clause — free to use, modify, and include in your projects with attribution to [Futura Research](https://github.com/futura-research). Not for resale. See [LICENSE](LICENSE) for details.
+[MIT](LICENSE) — fully open source. You can use, modify, and redistribute `claude-switch` freely (including commercially), provided the copyright notice crediting [Futura Research](https://github.com/futura-research) is retained in copies or substantial portions of the software.
 
 ## Contributing
 
