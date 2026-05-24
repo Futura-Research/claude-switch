@@ -79,4 +79,4 @@ Do not add runtime dependencies without discussion in an issue first.
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the [Apache 2.0 + Commons Clause](LICENSE) license.
+By contributing, you agree that your contributions will be licensed under the [MIT](LICENSE) license.

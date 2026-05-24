@@ -177,13 +177,10 @@ Dev dependencies (tsup, vitest, eslint, prettier, etc.) don't ship to users.
 
 ## License
 
-**Apache 2.0 + Commons Clause**
+**MIT**
 
-- **Allowed**: use, modify, distribute, include in projects — with attribution to Futura Research
-- **Not allowed**: sell the software or services whose value substantially derives from it
-- **Attribution**: all copies must retain the license notice crediting Futura Research
-
-This is a common pattern used by Redis, Confluent, and others to keep software open while preventing resale.
+- **Allowed**: use, modify, distribute, sublicense, and sell — fully open source
+- **Required**: retain the copyright notice crediting Futura Research in copies or substantial portions of the software
 
 ## File Structure
 
@@ -212,7 +209,7 @@ claude-switch/
   tsconfig.json
   tsup.config.ts
   CONTRIBUTING.md
-  LICENSE             # Apache 2.0 + Commons Clause
+  LICENSE             # MIT
   README.md
 ```
 
@@ -294,7 +291,7 @@ Requires an `NPM_TOKEN` repository secret (generated from npmjs.com → Access T
   "version": "1.0.0",
   "description": "Switch between multiple Claude Code accounts with named profiles",
   "author": "Futura Research",
-  "license": "Apache-2.0",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/futura-research/claude-switch"
